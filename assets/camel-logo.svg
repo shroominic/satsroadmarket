@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180" width="240" height="180" role="img" aria-label="SatsRoadMarket camel mark">
+  <!-- Original mark: desert camel silhouette + sat disk. Not a copy of any third-party logo. -->
+  <defs>
+    <linearGradient id="sand" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a2a18"/>
+      <stop offset="100%" stop-color="#1a1208"/>
+    </linearGradient>
+  </defs>
+  <rect width="240" height="180" fill="url(#sand)"/>
+  <!-- faint dunes -->
+  <path d="M0 148 C40 136 70 152 110 144 C150 136 180 150 240 138 L240 180 L0 180 Z" fill="#2a1c0e"/>
+  <path d="M0 158 C50 150 90 166 140 156 C180 148 210 160 240 152 L240 180 L0 180 Z" fill="#22160a"/>
+  <!-- camel body -->
+  <g fill="#c9a66b" stroke="#8b6914" stroke-width="1.2" stroke-linejoin="round">
+    <!-- legs -->
+    <path d="M78 128 L74 156 L84 156 L86 130 Z"/>
+    <path d="M96 130 L94 156 L104 156 L104 132 Z"/>
+    <path d="M138 128 L136 156 L146 156 L146 130 Z"/>
+    <path d="M154 126 L152 156 L162 156 L162 128 Z"/>
+    <!-- body + hump -->
+    <path d="M70 118
+             C68 98 86 88 104 92
+             C118 70 138 66 152 82
+             C168 78 184 88 186 106
+             C188 118 180 126 166 128
+             L78 128
+             C72 126 70 122 70 118 Z"/>
+    <!-- neck + head -->
+    <path d="M168 100
+             C176 86 182 70 178 56
+             C176 48 182 44 188 46
+             C196 48 200 56 196 64
+             L192 72
+             C190 78 186 86 180 96
+             C176 102 172 104 168 100 Z"/>
+    <!-- ear -->
+    <path d="M186 48 L190 38 L196 46 Z"/>
+    <!-- tail -->
+    <path d="M72 112 C58 108 52 118 54 126 C56 120 62 116 72 116 Z"/>
+  </g>
+  <!-- eye -->
+  <circle cx="190" cy="54" r="2.2" fill="#1a1208"/>
+  <!-- sat disk (stylized) behind hump -->
+  <circle cx="128" cy="78" r="16" fill="none" stroke="#e6c98a" stroke-width="2.5"/>
+  <text x="128" y="84" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="18" font-weight="bold" fill="#e6c98a">₿</text>
+  <!-- brand ribbon -->
+  <rect x="18" y="8" width="204" height="22" fill="#1a1208" stroke="#8b6914" stroke-width="1"/>
+  <text x="120" y="24" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="13" letter-spacing="1.5" fill="#e6c98a">SATSROADMARKET</text>
+</svg>
