@@ -359,7 +359,7 @@ if (!ONLY || ONLY.has('12')) {
     const idsBefore = await page.locator('article.card').evaluateAll((els) => els.map((e) => e.querySelector('a')?.href)); let badges = 0;
     for (let i = 0; i < 20 && !badges; i++) { await page.waitForTimeout(3000); badges = await page.locator('.m-badge').count(); }
     const sameNodes = await page.locator('article.card').evaluateAll((els) => els.map((e) => e.querySelector('a')?.href)); await shot(w, 'market-m-badge');
-    if (JSON.stringify(idsBefore) !== JSON.stringify(sameNodes)) throw new Error('cards changed while badges loaded');
+    /* background paging may append new cards; the cards already shown must keep their positions (no re-render) */ if (JSON.stringify(sameNodes.slice(0, idsBefore.length)) !== JSON.stringify(idsBefore)) throw new Error('already-shown cards changed while badges loaded');
     if (!badges) return 'no Marmot-enabled vendor among the visible listings (cannot assert badge); chip present and off by default';
     const tip = await page.locator('.m-badge').first().getAttribute('title'); if (!/Marmot-enabled/.test(tip)) throw new Error('tooltip ' + tip);
     await page.getByRole('button', { name: 'Add filter Marmot vendors' }).click(); await page.waitForTimeout(800);
