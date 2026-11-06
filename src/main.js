@@ -3,11 +3,13 @@ import { DEV_FEATURES } from './lib/flags.js';
 import { isLocalMode, loadIdentity, loadRelays, loadListingRelays, BROADCAST_RELAYS, probeRelay, signerFor, shortKey, storage, npubOf } from './lib/nostr.js';
 import { DEFAULT_BLOCKED, loadKeywords, nsfwEnabled, setNsfwEnabled } from './lib/filter.js';
 import { createRateService } from './lib/money.js';
+import { createDmTransport } from './marketplace/dmchat.js';
+import { createSupportCache } from './marketplace/marmotSupport.js';
 import { createListingLoader, createProfileCache } from './marketplace/loader.js';
 import { mountMarket } from './marketplace/view.js';
 import { mountSell } from './marketplace/sell.js';
 import { mountStatus } from './ui/status.js';
-import { mountChats, startConversation } from './ui/chat.js';
+import { mountChats, startConversation, startDmConversation } from './ui/chat.js';
 import { mountIdentity } from './ui/identity.js';
 import { startMarmot, cashu, isTestMint } from './ui/adapters.js';
 import { h, clear } from './ui/dom.js';
@@ -33,16 +35,25 @@ function makeLoader() {
   app.profiles = createProfileCache({ pool: app.pool, relays: app.listingRelays, storage: profileStorage, onChange: () => app.emit('profiles') });
 }
 app.rates = createRateService({ storage, onChange: () => app.emit('rates') });
+const makeSupport = () => { app.support = createSupportCache({ pool: app.pool, relays: app.relays, storage, onChange: () => app.emit('support') }); };
+makeSupport();
+function makeDm() {
+  app.dm?.stop(); app.dm = null; if (!app.identity) return;
+  app.dm = createDmTransport({ pool: app.pool, identity: app.identity, storage: idb('satsroad-dm'), getRelays: () => ({ lookup: [...new Set([...app.listingRelays, ...app.relays])], defaults: app.listingRelays }), onChange: () => app.emit('dm') });
+  app.dm.load().then(() => app.dm?.start());
+}
+makeDm();
 makeLoader();
 app.loadMore = () => app.loader.more(2);
 app.reloadBlocked = () => { app.nsfwOn = nsfwEnabled(storage); app.blocked = app.nsfwOn ? loadKeywords(storage) : []; app.publishBlocked = [...new Set([...DEFAULT_BLOCKED, ...loadKeywords(storage)])]; app.emit('listings'); app.emit('nsfw'); };
 app.setNsfw = (on) => { setNsfwEnabled(storage, on); app.reloadBlocked(); };
 app.reloadBlocked();
 app.startConversation = (listing) => startConversation(app, listing);
+app.startDmConversation = (listing) => startDmConversation(app, listing);
 
-app.setIdentity = (identity) => { app.identity = identity; app.signer = identity && signerFor(identity); app.selectedGroup = ''; app.restartMarmot(); app.emit('identity'); renderChrome(); route(); };
-app.setListingRelays = (relays) => { app.listingRelays = relays; makeLoader(); app.emit('relays'); app.probeRelays(); app.refreshListings(); renderChrome(); };
-app.setRelays = (relays) => { app.relays = relays; app.emit('relays'); app.probeRelays(); app.restartMarmot(); app.refreshListings(); renderChrome(); };
+app.setIdentity = (identity) => { app.identity = identity; app.signer = identity && signerFor(identity); makeDm(); app.selectedGroup = ''; app.restartMarmot(); app.emit('identity'); renderChrome(); route(); };
+app.setListingRelays = (relays) => { app.listingRelays = relays; makeLoader(); makeDm(); app.emit('relays'); app.probeRelays(); app.refreshListings(); renderChrome(); };
+app.setRelays = (relays) => { app.relays = relays; makeSupport(); makeDm(); app.emit('relays'); app.probeRelays(); app.restartMarmot(); app.refreshListings(); renderChrome(); };
 
 /* ---------------- relays ---------------- */
 let probing = false;

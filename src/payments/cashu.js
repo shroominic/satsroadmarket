@@ -59,7 +59,7 @@ export function overlapsPriorPayment(payment, priorProofIds) {
 
 const ALREADY_SPENT = 11001;       // NUT-00 "token already spent"
 const QUOTE_NOT_PAID = 20001;      // NUT-04 "quote not paid"
-const TIMEOUT_MS = 15_000;
+const TIMEOUT_MS = 30_000; // public mints can answer slowly (testnut took 9-30 s during testing)
 
 /** Canonical mint URL (scheme+host lowercased, no trailing slash). Throws on junk. */
 export function normalizeMintUrl(input) {

@@ -54,7 +54,7 @@ export function mountMarket(root, app, { address } = {}) {
       h('div', { class: 'card-body' },
         h('h3', {}, h('a', { onClick: saveScroll, href: `#/listing/${encodeURIComponent(listing.address)}` }, listing.title)),
         h('div', { class: 'price' }, priceLabel(listing.priceInfo, app.rates.map()).text),
-        h('div', { class: 'meta' }, mine ? h('span', { class: 'tag-mine' }, 'YOUR LISTING') : `seller ${app.profiles?.get(listing.pubkey)?.name || shortKey(npubOf(listing.pubkey))}`, ' · ', ago(listing.createdAt))));
+        h('div', { class: 'meta' }, h('span', { class: 'm-slot', 'data-pk': listing.pubkey }), mine ? h('span', { class: 'tag-mine' }, 'YOUR LISTING') : `seller ${app.profiles?.get(listing.pubkey)?.name || shortKey(npubOf(listing.pubkey))}`, ' · ', ago(listing.createdAt))));
   }
 
   const detailReason = (listing) => {
@@ -118,6 +118,23 @@ export function mountMarket(root, app, { address } = {}) {
         text, h('div', { class: 'actions' }, send, button('Cancel', () => slot.replaceChildren(), { cls: 'btn-small' })), st));
     }
     if (pendingDm(app, listing.address) && !mine) queueMicrotask(() => showWaiting());
+    /* Secondary action, always available: a standard NIP-17 DM conversation (not Marmot). One-time confirmation per conversation. */
+    const dmKey = `sr.dmok.${app.identity?.pubkey}.${listing.pubkey}.${listing.address}`;
+    const dmSlot = h('div', { class: 'status-slot' });
+    const goDm = async () => {
+      try { dmSlot.replaceChildren(notice('info', 'Opening the conversation…')); const out = await app.startDmConversation(listing); storage.set(dmKey, '1'); location.hash = '#/chats'; if (!out.delivered) app.emit('dm'); }
+      catch (error) { dmSlot.replaceChildren(notice('error', error.message)); }
+    };
+    const dmBtn = button('Message without Marmot', () => {
+      if (storage.get(dmKey)) return goDm();
+      const supported = app.support?.get(listing.pubkey) === true;
+      dmSlot.replaceChildren(h('div', { class: 'notice notice-warn', role: 'status', 'data-testid': 'dm-confirm' },
+        h('b', {}, 'Standard DM (not Marmot)'),
+        h('p', { class: 'small' }, 'Your messages are end-to-end encrypted with NIP-17 gift wraps, but there is no forward secrecy and no post-compromise security: if a key ever leaks, past messages can be read. It also leaks more metadata than Marmot. Orders and payments work the same way, but an ecash token sent in a DM is only as private as the DM.'),
+        h('div', { class: 'actions' }, button('Continue with standard DM', goDm, { cls: 'btn-small' }),
+          supported ? button('Use Marmot instead', () => { dmSlot.replaceChildren(); startBtn.click(); }, { cls: 'btn-small btn-primary' }) : null,
+          button('Cancel', () => dmSlot.replaceChildren(), { cls: 'btn-small' }))));
+    }, { cls: 'btn-small btn-link', disabled: !app.identity || listing.pubkey === app.identity?.pubkey || listing.price == null });
     return h('section', { class: 'detail panel' },
       h('div', { class: 'panel-title' }, h('span', {}, listing.title), h('a', { href: '#/market', class: 'panel-title-link' }, '[ back to market ]')),
       h('div', { class: 'detail-grid' },
@@ -126,13 +143,14 @@ export function mountMarket(root, app, { address } = {}) {
           h('div', { class: 'price big' }, priceLabel(listing.priceInfo, app.rates.map()).text),
           h('p', { class: 'description' }, listing.description || 'No description.'),
           h('dl', { class: 'facts' },
-            h('dt', {}, 'Seller'), h('dd', { class: 'mono wrap' }, npubOf(listing.pubkey)),
+            h('dt', {}, 'Seller'), h('dd', { class: 'mono wrap' }, h('span', { class: 'm-slot', 'data-pk': listing.pubkey }), npubOf(listing.pubkey)),
             listing.location ? [h('dt', {}, 'Location'), h('dd', {}, listing.location)] : null,
             listing.tags?.length ? [h('dt', {}, 'Tags'), h('dd', {}, listing.tags.join(', '))] : null,
             h('dt', {}, 'Listed'), h('dd', {}, ago(listing.createdAt)),
             h('dt', {}, 'Address'), h('dd', { class: 'mono wrap small' }, listing.address)),
           h('div', { class: 'actions' }, startBtn, reason ? h('span', { class: 'quiet small' }, reason) : null),
           slot,
+          h('div', { class: 'actions' }, dmBtn), dmSlot,
           h('p', { class: 'quiet small' }, 'The listing is public. Everything you say after this is inside an end-to-end encrypted Marmot group. Group invites and relay traffic are still visible as metadata to relay operators.'))));
   }
 
@@ -145,11 +163,18 @@ export function mountMarket(root, app, { address } = {}) {
     if (cardCache.size > 600) { const live = new Set(list.map(cardKey)); for (const k of cardCache.keys()) if (!live.has(k)) cardCache.delete(k); }
     return nodes;
   }
+  /** In-place badge update: touches only the badge nodes, never the cards. */
+  function updateBadges() {
+    for (const slot of root.querySelectorAll('.m-slot')) {
+      const on = app.support?.get(slot.dataset.pk) === true; if (slot.dataset.on === String(on)) continue; slot.dataset.on = String(on);
+      slot.className = on ? 'm-slot m-badge' : 'm-slot'; slot.textContent = on ? 'M' : ''; if (on) { slot.title = 'Marmot-enabled: supports end-to-end encrypted MLS chat'; slot.setAttribute('aria-label', slot.title); } else { slot.removeAttribute('title'); slot.removeAttribute('aria-label'); }
+    }
+  }
   function drawNow() {
     const all = app.listings;
     const { shown, hidden } = filterListings(all, app.blocked);
     const searched = shown.filter((l) => !search || `${l.title} ${l.description}`.toLowerCase().includes(search));
-    const { shown: visible, hidden: hiddenBy } = applyFilters(searched, active);
+    const { shown: visible, hidden: hiddenBy } = applyFilters(searched, active, MARKET_FILTERS, { support: (pk) => app.support?.get(pk) });
     const setFilter = (id, on) => { if (on) active.add(id); else active.delete(id); saveActiveFilters(storage, active); shownCount = PAGE; page = 0; draw(); };
     keep(filterBar, [...active].join(',') + '|' + app.nsfwOn, () => filterBar.replaceChildren(
       app.nsfwOn ? h('span', { class: 'chip chip-active' }, 'NSFW filter', h('button', { type: 'button', class: 'chip-x', 'aria-label': 'Remove filter NSFW filter', onClick: () => app.setNsfw(false) }, '\u2715'))
@@ -188,6 +213,7 @@ export function mountMarket(root, app, { address } = {}) {
     pager.hidden = !!address || !visible.length;
     if (!address) {
       app.profiles?.ensure(items.map((l) => l.pubkey));
+      app.support?.ensure(items.map((l) => l.pubkey)); updateBadges();
       for (const code of new Set(items.filter((l) => l.priceInfo.kind === 'fiat').map((l) => l.priceInfo.currency))) app.rates.ensure(code);
       if (!infinite && !exhausted && !app.loader.busy && budget > 0 && visible.length < (page + 2) * PAGE) { budget--; app.loadMore(); } // classic pages: prefetch the next batch before the user gets there
       if (infinite) setTimeout(checkNear, 60);
@@ -216,8 +242,8 @@ export function mountMarket(root, app, { address } = {}) {
   draw();
   const off = app.on('listings', draw);
   const offId = app.on('identity', draw);
-  const offM = app.on('marmot', draw); const offP = app.on('profiles', draw); const offR = app.on('rates', draw); const offN = app.on('nsfw', draw);
-  return () => { off(); offId(); offM(); offP(); offR(); offN(); io?.disconnect(); removeEventListener('scroll', checkNear); pollers.forEach((f) => f()); };
+  const offM = app.on('marmot', draw); const offP = app.on('profiles', draw); const offR = app.on('rates', draw); const offN = app.on('nsfw', draw); const offS = app.on('support', () => { if (active.has('marmot')) draw(); else updateBadges(); });
+  return () => { off(); offId(); offM(); offP(); offR(); offN(); offS(); io?.disconnect(); removeEventListener('scroll', checkNear); pollers.forEach((f) => f()); };
 }
 
 export { fetchListings };

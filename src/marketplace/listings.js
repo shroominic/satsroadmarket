@@ -105,18 +105,20 @@ export function filterByImage(listings, hasImageOnly) {
 /** Add more entries here to get more default filter chips. `locked` chips are shown but cannot be removed. */
 export const MARKET_FILTERS = [
   { id: 'hasImage', label: 'Has image', apply: (l) => filterByImage(l, true), hiddenText: (n) => `${n} listing${n > 1 ? 's' : ''} without images hidden.` },
+  /** OFF by default. Needs ctx.support(pubkey) -> true/false/undefined; vendors not yet looked up are not shown while the chip is on. */
+  { id: 'marmot', label: 'Marmot vendors', default: false, apply: (l, ctx) => { const shown = l.filter((x) => ctx?.support?.(x.pubkey) === true); return { shown, hidden: l.length - shown.length }; } },
 ];
 const FILTER_KEY = 'sr.filters';
 /** Active filter ids, persisted per browser. Default: every filter on. Legacy key sr.hasImage=0 is honoured. */
 export function loadActiveFilters(storage) {
   let saved = null; try { saved = storage.getJSON(FILTER_KEY, null); } catch { /* ignore */ }
-  const ids = Array.isArray(saved) ? saved : MARKET_FILTERS.map((f) => f.id);
+  const ids = Array.isArray(saved) ? saved : MARKET_FILTERS.filter((f) => f.default !== false).map((f) => f.id);
   return new Set(ids.filter((id) => !(id === 'hasImage' && storage.get('sr.hasImage') === '0' && !Array.isArray(saved))));
 }
 export function saveActiveFilters(storage, set) { try { storage.setJSON(FILTER_KEY, [...set]); } catch { /* ignore */ } }
 /** Applies the active chips; returns visible listings plus a per-filter hidden count. */
-export function applyFilters(listings, active, filters = MARKET_FILTERS) {
+export function applyFilters(listings, active, filters = MARKET_FILTERS, ctx = {}) {
   let current = listings; const hidden = {};
-  for (const f of filters) { if (!active.has(f.id)) continue; const r = f.apply(current); current = r.shown; hidden[f.id] = r.hidden; }
+  for (const f of filters) { if (!active.has(f.id)) continue; const r = f.apply(current, ctx); current = r.shown; hidden[f.id] = r.hidden; }
   return { shown: current, hidden };
 }

@@ -70,8 +70,8 @@ export function createRateService({ fetchImpl = globalThis.fetch?.bind(globalThi
   const writeStore = () => { try { storage?.set('sr.rates', JSON.stringify(Object.fromEntries(mem))); } catch { /* ignore */ } };
   for (const [k, v] of Object.entries(readStore())) mem.set(k, v);
   async function fetchRate(code) {
-    try { const r = await fetchImpl(`https://getalby.com/api/rates/${code.toLowerCase()}.json`); if (r.ok) { const j = await r.json(); const v = Number(j.rate_float ?? j.rate); if (v > 0) return { rate: v, source: 'getalby.com' }; } } catch { /* fall through */ }
-    try { const r = await fetchImpl('https://mempool.space/api/v1/prices'); if (r.ok) { const j = await r.json(); const v = Number(j[code]); if (v > 0) return { rate: v, source: 'mempool.space' }; } } catch { /* unavailable */ }
+    try { const r = await fetchImpl(`https://getalby.com/api/rates/${code.toLowerCase()}.json`, { signal: AbortSignal.timeout(12000) }); if (r.ok) { const j = await r.json(); const v = Number(j.rate_float ?? j.rate); if (v > 0) return { rate: v, source: 'getalby.com' }; } } catch { /* fall through */ }
+    try { const r = await fetchImpl('https://mempool.space/api/v1/prices', { signal: AbortSignal.timeout(12000) }); if (r.ok) { const j = await r.json(); const v = Number(j[code]); if (v > 0) return { rate: v, source: 'mempool.space' }; } } catch { /* unavailable */ }
     return null;
   }
   const api = {

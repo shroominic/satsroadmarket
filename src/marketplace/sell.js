@@ -52,7 +52,7 @@ export function mountSell(root, app) {
     event.preventDefault(); ackList.replaceChildren(); formStatus.replaceChildren();
     const input = { title: f.title.value, description: f.summary.value, price: f.price.value, currency: f.currency.value, image: f.image.value, category: f.category.value, location: f.location.value, legal: f.legal.checked };
     const blocked = findBlocked(`${input.title} ${input.description} ${input.category}`, app.publishBlocked || app.blocked);
-    if (blocked) { formStatus.replaceChildren(notice('error', `Not published: the text matches the blocked keyword “${blocked}”. Only legal goods may be listed.`)); return; }
+    if (blocked) { formStatus.replaceChildren(notice('error', `Not published: the text matches the NSFW keyword “${blocked}”. Only legal goods may be listed.`)); return; }
     try { buildListingTemplate(input); } catch (error) { formStatus.replaceChildren(notice('error', error.message)); return; }
     const live = app.relayList();
     formStatus.replaceChildren(notice('info', `Signing and sending to ${live.length} relay(s)…`));

@@ -134,3 +134,5 @@ fieldset.upload { border: 1px dashed var(--line-dim); margin: 6px 0 12px; paddin
 .popover { position: absolute; right: 0; top: 100%; z-index: 20; min-width: 280px; max-width: min(92vw, 420px); background: #0b0d0c; border: 1px solid var(--line-dim); padding: 10px 12px; font-size: 12px; color: var(--text, #cfe); box-shadow: 0 6px 24px rgba(0,0,0,.6); }
 .popover[hidden] { display: none; }
 @media (max-width: 600px) { .st:not(.st-who) .st-label { font-size: 0; } #marmot-status .st-label::before { content: 'M'; font-size: 11px; } #relay-status .st-label::before { content: 'L'; font-size: 11px; } .st-who .st-label { max-width: 7.5em; overflow: hidden; text-overflow: ellipsis; } }
+
+.m-badge { display: inline-block; margin-right: 6px; padding: 0 5px; border: 1px solid var(--green-hi, #3f8); color: var(--green-hi, #3f8); border-radius: 3px; font-size: 10px; font-weight: bold; line-height: 14px; vertical-align: 1px; }

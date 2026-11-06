@@ -14,7 +14,7 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME || un
 const send = async (w, text) => { await w.page.getByLabel('Message').fill(text); await w.page.getByRole('button', { name: 'Send', exact: true }).click(); };
 async function mk(name, { storageState, blockRelay } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, storageState });
-  await ctx.addInitScript(() => { try { if (!localStorage.getItem('sr.mint')) localStorage.setItem('sr.mint', 'https://testnut.cashu.space'); if (!localStorage.getItem('sr.localMode')) localStorage.setItem('sr.localMode', '0'); } catch {} });
+  if (!process.env.LOCAL) await ctx.addInitScript(() => { try { if (!localStorage.getItem('sr.mint')) localStorage.setItem('sr.mint', 'https://testnut.cashu.space'); if (!localStorage.getItem('sr.localMode')) localStorage.setItem('sr.localMode', '0'); } catch {} });
   const page = await ctx.newPage(); const errs = []; allPages.push({ name, page });
   page.on('pageerror', (e) => errs.push('pageerror: ' + e.message.slice(0, 200)));
   if (blockRelay) await page.routeWebSocket(blockRelay, (ws) => ws.close({ code: 1006, reason: 'blocked by test' }));
@@ -24,11 +24,11 @@ const shot = (w, n) => w.page.screenshot({ path: `${SHOTS}prod-${n}.png` });
 async function step(name, fn) {
   const t = Date.now();
   try { const note = await fn(); results.push({ name, ok: true, ms: Date.now() - t, note: note || '' }); console.log('PASS', name, Date.now() - t, 'ms', note || ''); return true; }
-  catch (e) { failN++; for (const p of allPages) { try { if (!p.page.isClosed()) await p.page.screenshot({ path: `/private/tmp/claude-501/e2e/fail-${failN}-${p.name}.png` }); } catch {} } results.push({ name, ok: false, ms: Date.now() - t, note: e.message.split('\n')[0].slice(0, 300) }); console.log('FAIL', name, e.message.split('\n')[0]); return false; }
+  catch (e) { failN++; const notices = []; for (const p of allPages) { try { notices.push(p.name + ': ' + (await p.page.locator('.notice').allTextContents()).join(' | ').slice(0, 300)); } catch {} } e.message = e.message.split('\n').slice(0, 3).join(' ') + ' || notices: ' + notices.join(' // '); for (const p of allPages) { try { if (!p.page.isClosed()) await p.page.screenshot({ path: `/private/tmp/claude-501/e2e/fail-${failN}-${p.name}.png` }); } catch {} } results.push({ name, ok: false, ms: Date.now() - t, note: e.message.split('\n')[0].slice(0, 700) }); console.log('FAIL', name, e.message.split('\n')[0]); return false; }
 }
 const go = async (w, hash) => { await w.page.evaluate((h) => { location.hash = h; }, hash); await w.page.waitForTimeout(300); };
 async function identity(w) {
-  await w.page.goto(BASE, { waitUntil: 'load' }); await go(w, '#/identity'); await w.page.getByRole('button', { name: 'Generate new identity' }).click();
+  await w.page.goto(BASE, { waitUntil: 'load' }); await w.page.waitForFunction(() => globalThis.__satsroad, null, { timeout: 30000 }); await go(w, '#/identity'); await w.page.getByRole('button', { name: 'Generate new identity' }).click();
   await w.page.waitForFunction(() => globalThis.__satsroad?.marmotState?.status === 'ready' && globalThis.__satsroad.keyPackage.status === 'ok', null, { timeout: T });
   await grabKey(w);
 }
@@ -38,10 +38,11 @@ async function publish(w, title, { image = '', price = '100' } = {}) {
   await w.page.getByRole('button', { name: 'Sign and publish to relays' }).click(); await w.page.getByText(/Published: at least one relay/).waitFor({ timeout: T });
   return (await w.page.locator('.acks li').allTextContents()).join(' | ');
 }
-async function buyerStarts(b, title) {
+async function buyerStarts(b, title, { openOnly = false } = {}) {
   await b.page.evaluate(() => localStorage.setItem('sr.hasImage', '0')); await go(b, '#/identity'); await go(b, '#/market'); const card = b.page.locator('article.card', { hasText: title });
   for (let i = 0; i < 8 && !(await card.count()); i++) { await b.page.getByRole('button', { name: 'Refresh' }).click(); await b.page.waitForTimeout(4000); }
   await card.first().getByRole('link').first().click();
+  if (openOnly) return;
   await b.page.getByRole('button', { name: 'Start private conversation' }).click(); await b.page.waitForURL(/#\/chats/, { timeout: T });
 }
 async function sellerJoins(s) { await go(s, '#/chats'); const a = s.page.getByRole('button', { name: 'Accept & join' }); await a.waitFor({ timeout: 90000 }); await a.click(); await s.page.getByText(/You are the seller/).waitFor({ timeout: T }); }
@@ -312,12 +313,72 @@ if (!process.env.LIVE && (!ONLY || ONLY.has('10'))) {
     if (!/Listed at 1 USD/.test(line) || !/USD\/BTC/.test(line)) throw new Error('rate line: ' + line);
     const tags = await b.page.evaluate(async () => { const m = globalThis.__satsroad.marmot; const g = (await m.listGroups())[0]; const h = await m.history(g.id); return h.find((r) => r.tags.some((t) => t[0] === 'subject'))?.tags; });
     if (!tags.some((t) => t[0] === 'price' && t[1] === '1' && t[2] === 'USD') || !tags.some((t) => t[0] === 'rate') || !tags.some((t) => t[0] === 'amount')) throw new Error('tags: ' + JSON.stringify(tags));
-    await b.page.getByRole('button', { name: /Fund TEST wallet/ }).click(); await b.page.getByText('Test wallet funded.').waitFor({ timeout: T }); await b.page.getByRole('button', { name: /Fund TEST wallet/ }).click(); await b.page.waitForTimeout(6000); /* second top-up leaves room for mint fees */
+    await b.page.getByRole('button', { name: /Fund TEST wallet/ }).click(); await b.page.getByText('Test wallet funded.').waitFor({ timeout: T });
     await b.page.getByRole('button', { name: 'Create token from wallet' }).click(); await b.page.getByText(/Token for .* created/).waitFor({ timeout: T });
     await b.page.getByRole('button', { name: 'Send ecash in this conversation' }).click(); const r = s.page.getByRole('button', { name: /^Redeem/ }); await r.waitFor({ timeout: 90000 }); await r.click();
     await s.page.locator('.pill', { hasText: /PAID/i }).first().waitFor({ timeout: T }); return tags.map((t) => t.join(':')).join(' ');
   });
   await s.ctx.close(); await b.ctx.close();
+}
+
+/* ---- Scenario 11: standard NIP-17 conversation ("Message without Marmot"): confirm, send/receive both ways, order + payment, persistence ---- */
+if (!process.env.LIVE && (!ONLY || ONLY.has('11'))) {
+  const s = await mk('seller'), b = await mk('buyer'); const title = `[test] Fail-dm ${rand}`;
+  await step('seller publishes a listing; buyer opens it and picks "Message without Marmot" (confirmation shown once)', async () => {
+    await identity(s); await identity(b); await publish(s, title, { price: '100' });
+    await buyerStarts(b, title, { openOnly: true });
+    await b.page.getByRole('button', { name: 'Message without Marmot' }).click(); const c = await b.page.getByTestId('dm-confirm').textContent({ timeout: 10000 });
+    if (!/forward secrecy/.test(c) || !/only as private as the DM/.test(c)) throw new Error('confirmation text: ' + c.slice(0, 120)); await shot(b, 'dm-standard-confirm');
+    await b.page.getByRole('button', { name: 'Continue with standard DM' }).click(); await b.page.waitForURL(/#\/chats/, { timeout: T });
+    await b.page.getByTestId('dm-label').waitFor({ timeout: T });
+  });
+  await step('seller receives the NIP-17 thread labelled "Standard DM (not Marmot)"; messages both ways', async () => {
+    await go(s, '#/chats'); await s.page.getByText('Standard DM (not Marmot)').first().waitFor({ timeout: 90000 }); await s.page.locator('.convo-btn').first().click(); await s.page.getByTestId('dm-label').waitFor({ timeout: T });
+    await send(b, 'hi via nip17'); await s.page.getByText('hi via nip17').waitFor({ timeout: 90000 }); await send(s, 'hello back via nip17'); await b.page.getByText('hello back via nip17').waitFor({ timeout: 90000 }); await shot(s, 'dm-standard-chat');
+  });
+  await step('order + payment in the DM thread: token warning shown, redeem -> PAID only after mint redemption, fulfilled', async () => {
+    await b.page.getByRole('button', { name: /Pay with ecash/ }).click(); await b.page.getByTestId('dm-token-warning').waitFor({ timeout: T });
+    await b.page.getByRole('button', { name: /Fund TEST wallet/ }).click(); await b.page.getByText('Test wallet funded.').waitFor({ timeout: T });
+    await b.page.getByRole('button', { name: 'Create token from wallet' }).click(); await b.page.getByText(/Token for .* created/).waitFor({ timeout: T });
+    await b.page.getByRole('button', { name: 'Send ecash in this conversation' }).click(); const r = s.page.getByRole('button', { name: /^Redeem/ }); await r.waitFor({ timeout: 90000 });
+    if (await s.page.locator('.pill', { hasText: /^PAID$/ }).count()) throw new Error('PAID before redemption'); await r.click(); await s.page.locator('.pill', { hasText: /PAID/ }).first().waitFor({ timeout: T });
+    await b.page.locator('.pill', { hasText: /PAID/ }).first().waitFor({ timeout: 90000 }); await s.page.getByRole('button', { name: 'Mark fulfilled' }).click(); await b.page.locator('.pill', { hasText: /FULFILLED/ }).first().waitFor({ timeout: 90000 }); await shot(b, 'dm-standard-paid');
+  });
+  await step('reload both: standard DM thread, messages and PAID/FULFILLED timeline persist', async () => {
+    for (const w of [s, b]) { await w.page.reload({ waitUntil: 'load' }); await go(w, '#/chats'); await w.page.getByText('hi via nip17').first().waitFor({ timeout: 60000 }); await w.page.locator('.pill', { hasText: /FULFILLED/ }).first().waitFor({ timeout: 60000 }); }
+  });
+  await s.ctx.close(); await b.ctx.close();
+}
+
+/* ---- Scenario 12 (live-safe, read-only): M badge + "Marmot vendors" chip, secondary DM action, NSFW keywords panel ---- */
+if (!ONLY || ONLY.has('12')) {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } }); const page = await ctx.newPage(); const w = { ctx, page, name: 'badge' };
+  await step('M badge appears in place for Marmot-enabled vendors (batched lookup); "Marmot vendors" chip is OFF by default and filters when added', async () => {
+    await page.goto(BASE + '/#/market', { waitUntil: 'load' }); await page.locator('article.card').first().waitFor({ timeout: 90000 });
+    await page.getByRole('button', { name: 'Add filter Marmot vendors' }).waitFor(); // off by default
+    const idsBefore = await page.locator('article.card').evaluateAll((els) => els.map((e) => e.querySelector('a')?.href)); let badges = 0;
+    for (let i = 0; i < 20 && !badges; i++) { await page.waitForTimeout(3000); badges = await page.locator('.m-badge').count(); }
+    const sameNodes = await page.locator('article.card').evaluateAll((els) => els.map((e) => e.querySelector('a')?.href)); await shot(w, 'market-m-badge');
+    if (JSON.stringify(idsBefore) !== JSON.stringify(sameNodes)) throw new Error('cards changed while badges loaded');
+    if (!badges) return 'no Marmot-enabled vendor among the visible listings (cannot assert badge); chip present and off by default';
+    const tip = await page.locator('.m-badge').first().getAttribute('title'); if (!/Marmot-enabled/.test(tip)) throw new Error('tooltip ' + tip);
+    await page.getByRole('button', { name: 'Add filter Marmot vendors' }).click(); await page.waitForTimeout(800);
+    const cards = await page.locator('article.card').count(); const withBadge = await page.locator('article.card .m-badge').count(); await shot(w, 'market-m-only');
+    if (cards !== withBadge) throw new Error(`${cards} cards but ${withBadge} badges with the chip on`); await page.getByRole('button', { name: 'Remove filter Marmot vendors' }).click();
+    return `${badges} badges; chip shows only badged vendors (${cards})`;
+  });
+  await step('listing detail: "Start private conversation" primary, "Message without Marmot" secondary always present', async () => {
+    await page.locator('article.card .card-link').first().click(); await page.getByRole('button', { name: 'Start private conversation' }).waitFor({ timeout: 20000 });
+    await page.getByRole('button', { name: 'Message without Marmot' }).waitFor(); await shot(w, 'listing-two-actions');
+  });
+  await step('NSFW keywords panel: on/off switch, removable tags, add input, reset to defaults, persisted', async () => {
+    await page.goto(BASE + '/#/identity', { waitUntil: 'load' }); await page.getByText('NSFW keywords').first().waitFor({ timeout: 30000 });
+    const n0 = await page.locator('.chip:has(.chip-x[aria-label^="Remove "])').count(); await page.getByLabel('NSFW keywords to add').fill('zzfoo, zzbar'); await page.getByLabel('NSFW keywords to add').press('Enter');
+    await page.getByLabel('Remove zzfoo').waitFor(); const n1 = await page.locator('.chip:has(.chip-x[aria-label^="Remove "])').count(); await page.reload({ waitUntil: 'load' }); await page.getByLabel('Remove zzbar').waitFor({ timeout: 30000 });
+    await shot(w, 'nsfw-keywords-panel'); await page.getByRole('button', { name: 'Reset to defaults' }).last().click(); await page.waitForTimeout(500);
+    if (await page.getByLabel('Remove zzfoo').count()) throw new Error('reset did not remove custom words'); if (!(await page.getByLabel('NSFW filter on').count())) throw new Error('no on/off switch'); return `${n0} -> ${n1} tags, persisted, reset ok`;
+  });
+  await ctx.close();
 }
 fs.writeFileSync('/private/tmp/claude-501/e2e/failures.json', JSON.stringify(results, null, 1));
 const cleanup = await deleteTestEvents({ keys: testKeys }); console.log('CLEANUP', JSON.stringify(cleanup)); fs.writeFileSync('/private/tmp/claude-501/e2e/cleanup-failures.json', JSON.stringify(cleanup, null, 1));

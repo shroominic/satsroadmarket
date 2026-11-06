@@ -2,6 +2,7 @@ import { cashu, isTestMint } from './adapters.js';
 import { DEV_FEATURES } from '../lib/flags.js';
 import { minAcceptableSats } from '../lib/money.js';
 import { fetchListingDms } from '../marketplace/dm.js';
+import { isDmId, dmId } from '../marketplace/dmchat.js';
 import { h, ago, sats, notice, button, busy } from './dom.js';
 import { deriveOrder, parsePaymentTags, receiptRumor, requestRumor, shippedRumor, SUBJECT } from '../marketplace/orders.js';
 import { shortKey, storage, npubOf } from '../lib/nostr.js';
@@ -10,6 +11,8 @@ const metaKey = (app) => `sr.groups.${app.identity.pubkey}`;
 const redeemKey = (app, groupId) => `sr.redeem.${app.identity.pubkey}.${groupId}`;
 const getMeta = (app) => storage.getJSON(metaKey(app), {});
 const setMeta = (app, groupId, patch) => { const all = getMeta(app); all[groupId] = { ...all[groupId], ...patch }; storage.setJSON(metaKey(app), all); };
+/** Which transport carries this conversation: Marmot group or standard NIP-17 DM. */
+const trOf = (app, id) => (isDmId(id) ? app.dm : app.marmot);
 const tagOf = (r, name) => r.tags?.find((t) => t[0] === name);
 
 /** Buyer side: create the group, invite the seller, send the order request. Honest about each stage. */
@@ -76,9 +79,9 @@ export function mountChats(root, app) {
   }
 
   async function loadLists() {
-    if (!app.marmot) return;
+    if (!app.marmot && !app.dm) return;
     let g; let i;
-    try { [g, i] = await Promise.all([app.marmot.listGroups(), app.marmot.listInvites()]); }
+    try { const [mg, mi, dg] = await Promise.all([app.marmot ? app.marmot.listGroups() : [], app.marmot ? app.marmot.listInvites() : [], app.dm ? app.dm.listGroups() : []]); g = [...mg, ...dg]; i = mi; }
     catch (error) { banner.replaceChildren(notice('error', `Could not read conversations: ${error.message}`)); return; }
     const sig = JSON.stringify([g.map((x) => [x.id, x.name, x.status]), i.map((x) => [x.id, x.joinable]), app.selectedGroup]);
     groups = g; invites = i;
@@ -108,16 +111,16 @@ export function mountChats(root, app) {
     } else inviteBox.append(h('p', { class: 'quiet small' }, 'No pending invites. If a buyer invited you while you were away, it appears here and can be accepted later.'));
     const meta = getMeta(app);
     listBox.replaceChildren(...(groups.length ? groups.map((g) => h('li', { class: g.id === app.selectedGroup ? 'active' : '' },
-      h('button', { type: 'button', class: 'convo-btn', onClick: () => openGroup(g.id) }, h('b', {}, meta[g.id]?.title || g.name || 'Private conversation'), h('span', { class: 'small quiet' }, `${(g.members || []).length || '?'} member(s)${g.pendingWelcomes ? ' · invite pending' : ''}`)))) : [h('li', { class: 'quiet small' }, 'No conversations yet. Open a listing and start one.')]));
+      h('button', { type: 'button', class: 'convo-btn', onClick: () => openGroup(g.id) }, h('b', {}, meta[g.id]?.title || g.name || 'Private conversation'), h('span', { class: 'small quiet' }, g.standardDm ? 'Standard DM (not Marmot)' : `${(g.members || []).length || '?'} member(s)${g.pendingWelcomes ? ' · invite pending' : ''}`)))) : [h('li', { class: 'quiet small' }, 'No conversations yet. Open a listing and start one.')]));
   }
 
   async function openGroup(id, force = false) {
     if (id !== app.selectedGroup) { threadSig = ''; }
     app.selectedGroup = id; storage.set(`sr.sel.${me()}`, id); const mine = ++token;
     if (force || id !== current?.id) drawLists();
-    if (!app.marmot) return;
+    if (!trOf(app, id)) return;
     let rumors = []; let outbox = [];
-    try { rumors = await app.marmot.history(id); outbox = await app.marmot.outbox(id); }
+    try { rumors = await trOf(app, id).history(id); outbox = await trOf(app, id).outbox(id); }
     catch (error) { if (mine === token) { msgBox.replaceChildren(notice('error', `Could not read message history: ${error.message}`, button('Retry', () => openGroup(id), { cls: 'btn-small' }))); } return; }
     if (mine !== token || !alive) return;
     const grp = groups.find((g) => g.id === id);
@@ -138,7 +141,7 @@ export function mountChats(root, app) {
   function drawThread() {
     const { id, rumors, order, meta, role, group } = current;
     msgBox.hidden = false; composer.hidden = false;
-    head.replaceChildren(h('h2', {}, listingTitle(order.listingRef, meta)), h('div', { class: 'small quiet' },
+    head.replaceChildren(h('h2', {}, listingTitle(order.listingRef, meta)), group?.standardDm ? h('div', {}, h('span', { class: 'pill pill-wait', 'data-testid': 'dm-label' }, 'Standard DM (not Marmot)'), h('span', { class: 'small quiet' }, ' End-to-end encrypted with NIP-17 gift wraps, but no forward secrecy and more metadata than Marmot.')) : null, h('div', { class: 'small quiet' },
       `You are the ${role}. `, order.amount ? `Order ${sats(order.amount)} · ` : '', h('span', { class: `pill pill-${order.paid ? 'ok' : order.redeemFailed ? 'bad' : 'wait'}` }, order.status.toUpperCase())));
     timelineBox.replaceChildren(h('ol', { class: 'timeline' }, ...order.steps.map((s) => h('li', { class: `${s.done ? 'done' : ''} ${s.error ? 'bad' : ''}` }, h('span', { class: 'step-mark', 'aria-hidden': 'true' }, s.error ? '!' : s.done ? '✔' : '○'), h('span', {}, h('b', {}, s.label), s.at ? ` · ${ago(s.at)}` : '', s.detail ? ` · ${s.detail}` : '', s.error ? h('div', { class: 'step-error' }, s.error) : null)))));
     // messages
@@ -153,27 +156,37 @@ export function mountChats(root, app) {
       notes.push(notice('warn', 'The seller’s invite (Welcome) was not confirmed as delivered. They cannot read this conversation until it arrives.', retry), slot);
     }
     if (role === 'buyer' && meta.orderId && !order.steps[1].done) {
-      const retry = button('Resend order request', async () => { try { await busy(retry, 'Sending…', () => app.marmot.sendMessage(id, requestRumor({ orderId: meta.orderId, listingRef: meta.listingRef, amount: meta.price, title: meta.title, fiat: meta.fiat }))); setMeta(app, id, { requestError: '' }); await openGroup(id); } catch (e) { sendStatus.replaceChildren(notice('error', `Order request not sent: ${e.message}`)); } }, { cls: 'btn-small' });
+      const retry = button('Resend order request', async () => { try { await busy(retry, 'Sending…', () => trOf(app, id).sendMessage(id, requestRumor({ orderId: meta.orderId, listingRef: meta.listingRef, amount: meta.price, title: meta.title, fiat: meta.fiat }))); setMeta(app, id, { requestError: '' }); await openGroup(id); } catch (e) { sendStatus.replaceChildren(notice('error', `Order request not sent: ${e.message}`)); } }, { cls: 'btn-small' });
       notes.push(notice('warn', `The order request has not been sent${meta.requestError ? ` (${meta.requestError})` : ''}.`, retry));
     }
     if (current.outbox?.length) {
       const slot = h('span', {});
-      const retry = button('Retry delivery', async () => { try { await busy(retry, 'Retrying…', () => app.marmot.retryPending(id)); await openGroup(id); } catch (e) { slot.replaceChildren(notice('error', `Still not delivered: ${e.message}`)); } }, { cls: 'btn-small' });
+      const retry = button('Retry delivery', async () => { try { await busy(retry, 'Retrying…', () => trOf(app, id).retryPending(id)); await openGroup(id); } catch (e) { slot.replaceChildren(notice('error', `Still not delivered: ${e.message}`)); } }, { cls: 'btn-small' });
       notes.push(notice('warn', `${current.outbox.length} message(s) saved on this device but not acknowledged by any relay yet.`, retry), slot);
     }
     actionBox.append(...notes);
     const bar = h('div', { class: 'actions' });
     if (role === 'buyer' && !order.paid) bar.append(button(order.payments.length ? 'Pay with ecash again' : 'Pay with ecash', () => openPay()));
+    if (group?.standardDm && role === 'buyer' && !group.upgraded && app.support?.get(meta.seller) === true) bar.append(button('Upgrade this conversation to Marmot', async function () {
+      await act(this, 'Upgrading…', async () => {
+        const out = await app.marmot.startConversation(meta.seller, { listingRef: order.listingRef || meta.listingRef, label: `Order: ${meta.title || 'listing'}`.slice(0, 60) });
+        const gid = out?.id ?? out?.groupId; if (!gid) throw new Error('Marmot did not return a group id.');
+        setMeta(app, gid, { ...meta, role: 'buyer', standardDm: false, inviteUndelivered: out.delivered === false, upgradedFrom: id });
+        await app.marmot.sendMessage(gid, requestRumor({ orderId: order.orderId || meta.orderId, listingRef: order.listingRef || meta.listingRef, amount: order.amount || meta.price, title: meta.title, fiat: order.fiat || meta.fiat }));
+        await app.dm.markUpgraded(id, gid); app.selectedGroup = gid; app.emit('marmot');
+      });
+    }, { cls: 'btn-small', title: 'Starts a Marmot group with the same order. The DM thread stays as it is.' }));
+    if (group?.upgraded) bar.append(h('span', { class: 'small quiet' }, 'This order was upgraded to a Marmot conversation. Continue there.'));
     if (role === 'seller') {
       const pending = order.payments.filter((p) => !p.duplicate);
       if (!order.paid && pending.length) bar.append(redeemButton(pending[pending.length - 1]));
       if (!order.paid && !pending.length) bar.append(h('span', { class: 'quiet small' }, 'Waiting for the buyer’s ecash.'));
-      if (order.paid && !order.fulfilled) bar.append(button('Mark fulfilled', async function () { await act(this, 'Marking…', () => app.marmot.sendMessage(id, shippedRumor({ orderId: order.orderId, listingRef: order.listingRef }))); }, { cls: 'btn-primary' }));
+      if (order.paid && !order.fulfilled) bar.append(button('Mark fulfilled', async function () { await act(this, 'Marking…', () => trOf(app, id).sendMessage(id, shippedRumor({ orderId: order.orderId, listingRef: order.listingRef }))); }, { cls: 'btn-primary' }));
     }
     actionBox.append(bar);
     if (current.redeemRecord?.state === 'failed' && role === 'seller' && !order.paid) actionBox.append(notice('error', `Last redemption failed: ${current.redeemRecord.error}`));
     if (current.redeemRecord?.state === 'ok' && !order.paid && role === 'seller') {
-      const slot = button('Send receipt to buyer', async function () { await act(this, 'Sending…', async () => { await app.marmot.sendMessage(id, receiptRumor({ orderId: order.orderId, listingRef: order.listingRef, amount: current.redeemRecord.amount })); storage.del(redeemKey(app, id)); }); }, { cls: 'btn-small' });
+      const slot = button('Send receipt to buyer', async function () { await act(this, 'Sending…', async () => { await trOf(app, id).sendMessage(id, receiptRumor({ orderId: order.orderId, listingRef: order.listingRef, amount: current.redeemRecord.amount })); storage.del(redeemKey(app, id)); }); }, { cls: 'btn-small' });
       actionBox.append(notice('warn', `Tokens were redeemed (${current.redeemRecord.amount} sats) but the buyer was not told yet.`, slot));
     }
   }
@@ -195,7 +208,7 @@ export function mountChats(root, app) {
         await openGroup(id); return;
       }
       storage.setJSON(redeemKey(app, id), { state: 'ok', amount: result.amount, at: Math.floor(Date.now() / 1000) });
-      try { await app.marmot.sendMessage(id, receiptRumor({ orderId: order.orderId, listingRef: order.listingRef, amount: result.amount })); storage.del(redeemKey(app, id)); sendStatus.replaceChildren(notice('ok', `Redeemed ${result.amount} sats at the mint. Order marked paid.`)); }
+      try { await trOf(app, id).sendMessage(id, receiptRumor({ orderId: order.orderId, listingRef: order.listingRef, amount: result.amount })); storage.del(redeemKey(app, id)); sendStatus.replaceChildren(notice('ok', `Redeemed ${result.amount} sats at the mint. Order marked paid.`)); }
       catch (error) { sendStatus.replaceChildren(notice('error', `Redeemed ${result.amount} sats, but the paid receipt could not be sent to the buyer: ${error.message}`)); }
       await openGroup(id);
     }, { cls: 'btn-primary' });
@@ -215,7 +228,7 @@ export function mountChats(root, app) {
   }
 
   function openPay() {
-    const { id, meta, order } = current;
+    const { id, meta, order, group } = current;
     const expected = order.amount || meta.price;
     const tokenIn = h('textarea', { rows: 3, placeholder: 'Paste a Cashu token (cashuB…), or create one from your wallet below', 'aria-label': 'Cashu token', class: 'mono' });
     const status = h('div', { class: 'status-slot' });
@@ -225,7 +238,7 @@ export function mountChats(root, app) {
     refreshBalance();
     const fund = !DEV_FEATURES ? h('span', {}) : button('Fund TEST wallet (fake sats)', async function () {
       status.replaceChildren(notice('info', 'Minting TEST ecash (fake sats, no value)…'));
-      try { await busy(this, 'Minting…', () => cashu.fundTestWallet(mintUrl.value.trim(), Math.max(expected || 0, 1000))); cashu.setMintUrl(mintUrl.value.trim()); status.replaceChildren(notice('ok', 'Test wallet funded.')); refreshBalance(); }
+      try { await busy(this, 'Minting…', () => cashu.fundTestWallet(mintUrl.value.trim(), Math.max(Math.ceil((expected || 0) * 1.1) + 10, 1000))); cashu.setMintUrl(mintUrl.value.trim()); status.replaceChildren(notice('ok', 'Test wallet funded.')); refreshBalance(); }
       catch (error) { status.replaceChildren(notice('error', `Could not fund the wallet: ${error.message} Only test mints auto-pay; a real mint needs a Lightning payment that you make yourself (docs/MINTS.md).`)); }
     }, { cls: 'btn-small', title: 'Test mints only (testnut.cashu.space or local FakeWallet). Sats have no value.' });
     const syncFund = () => { fund.hidden = !isTestMint(mintUrl.value.trim()); };
@@ -242,12 +255,13 @@ export function mountChats(root, app) {
         if (order.payments.some((p) => p.token === info.token)) throw new Error('This exact token was already sent in this order.');
         if (expected && info.amount < expected) throw new Error(`The token is worth ${info.amount} sats, the order costs ${expected} sats.`);
         const rumor = await cashu.paymentRumor({ token: info.token, orderId: order.orderId || meta.orderId, listingRef: order.listingRef || meta.listingRef, amount: info.amount, buyerPubkey: me() });
-        await busy(sendPay, 'Sending…', () => app.marmot.sendMessage(id, rumor));
+        await busy(sendPay, 'Sending…', () => trOf(app, id).sendMessage(id, rumor));
         payBox.replaceChildren(); await openGroup(id);
       } catch (error) { status.replaceChildren(notice('error', `Payment not sent: ${error.message}${error.code === 'NO_RELAY_ACK' ? ' The payment message is saved on this device; use “Retry delivery” in the conversation. The token is still in the box above: do not discard it.' : ''}`)); if (error.code === 'NO_RELAY_ACK') await openGroup(id); }
     }, { cls: 'btn-primary' });
     payBox.replaceChildren(h('div', { class: 'panel inner' }, h('div', { class: 'panel-title' }, h('span', {}, `Pay ${expected ? sats(expected) : ''} with ecash`), button('close', () => payBox.replaceChildren(), { cls: 'btn-link' })),
       (meta.fiat || order.fiat) ? h('p', { class: 'small', 'data-testid': 'rate-line' }, `Listed at ${(order.fiat || meta.fiat).amount} ${(order.fiat || meta.fiat).currency}. Rate used when the order was made: ${(order.fiat || meta.fiat).rate || '?'} ${(order.fiat || meta.fiat).currency}/BTC${meta.fiat?.source ? ` (${meta.fiat.source})` : ''}. You pay exactly ${sats(expected)}; the seller accepts up to 2% less to allow for rate movement.`) : null,
+      group?.standardDm ? h('p', { class: 'small', 'data-testid': 'dm-token-warning' }, 'This is a standard DM, not Marmot: the token is only as private as the DM. NIP-17 has no forward secrecy, so a later key compromise exposes it.') : null,
       h('p', { class: 'small quiet' }, 'The token is sent only inside this end-to-end encrypted group, never as a public event. It is a bearer token: whoever holds it can spend it. It is NOT paid until the seller redeems it at the mint.'),
       h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Mint'), mintUrl), h('div', { class: 'row-inline' }, balance, fund, make), h('p', { class: 'small quiet' }, 'Need funds? Identity → Ecash wallet → Add funds (Lightning) or Receive token.'),
       tokenIn, h('div', { class: 'actions' }, sendPay), status));
@@ -257,13 +271,13 @@ export function mountChats(root, app) {
     const text = draft.value.trim(); if (!text || !current) return;
     sendStatus.replaceChildren();
     try {
-      await busy(sendBtn, 'Sending…', () => app.marmot.sendMessage(current.id, { kind: 9, content: text, tags: [] }));
+      await busy(sendBtn, 'Sending…', () => trOf(app, current.id).sendMessage(current.id, { kind: 9, content: text, tags: [] }));
       draft.value = ''; await openGroup(current.id);
     } catch (error) { deliveryFailure(error, 'Message'); if (error.code === 'NO_RELAY_ACK') { draft.value = ''; await openGroup(current.id); } }
   });
   function deliveryFailure(error, what) {
     const id = current.id;
-    const retry = error.code === 'NO_RELAY_ACK' ? button('Retry delivery', async () => { try { await busy(retry, 'Retrying…', () => app.marmot.retryPending(id)); sendStatus.replaceChildren(notice('ok', 'Delivered after retry.')); await openGroup(id); } catch (e) { sendStatus.replaceChildren(notice('error', `Still not delivered: ${e.message}`, retry)); } }, { cls: 'btn-small' }) : null;
+    const retry = error.code === 'NO_RELAY_ACK' ? button('Retry delivery', async () => { try { await busy(retry, 'Retrying…', () => trOf(app, id).retryPending(id)); sendStatus.replaceChildren(notice('ok', 'Delivered after retry.')); await openGroup(id); } catch (e) { sendStatus.replaceChildren(notice('error', `Still not delivered: ${e.message}`, retry)); } }, { cls: 'btn-small' }) : null;
     sendStatus.replaceChildren(notice('error', `${what} not delivered: ${error.message}${retry ? ' It is saved on this device.' : ' Your text is kept; press Send to retry.'}`, retry));
   }
   draft.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendBtn.click(); });
@@ -271,12 +285,28 @@ export function mountChats(root, app) {
   async function tick() {
     drawBanner(); await loadLists();
     if (!app.selectedGroup && groups.length) { const saved = storage.get(`sr.sel.${me()}`); app.selectedGroup = groups.find((g) => g.id === saved)?.id || groups[0].id; }
-    if (app.selectedGroup && app.marmot) await openGroup(app.selectedGroup);
+    if (app.selectedGroup && trOf(app, app.selectedGroup)) await openGroup(app.selectedGroup);
   }
   head.replaceChildren(h('p', { class: 'quiet' }, 'Select a conversation.'));
   tick(); loadDms();
-  const offs = [app.on('marmot', () => { if (alive) tick(); }), app.on('identity', () => {})];
+  const offs = [app.on('marmot', () => { if (alive) tick(); }), app.on('dm', () => { if (alive) tick(); }), app.on('identity', () => {})];
   const dmTimer = setInterval(() => { if (alive && !document.hidden) loadDms(); }, 20000);
-  timer = setInterval(() => { if (alive && app.marmot && !document.hidden) { loadLists(); if (app.selectedGroup) openGroup(app.selectedGroup); } }, 5000);
+  timer = setInterval(() => { if (alive && (app.marmot || app.dm) && !document.hidden) { loadLists(); if (app.selectedGroup) openGroup(app.selectedGroup); } }, 5000);
   return () => { alive = false; clearInterval(timer); clearInterval(dmTimer); offs.forEach((o) => o()); };
+}
+
+/** Buyer side, standard DM: no Marmot group. Same order request rumor (amount in sats, fiat price and rate tags). */
+export async function startDmConversation(app, listing) {
+  if (!app.dm) throw new Error('Direct messages are not running yet. Create or import an identity first.');
+  if (listing.price == null) throw new Error('This listing has no price, so an order cannot be started.');
+  const quote = await app.rates.quote(listing.priceInfo);
+  const fiat = listing.priceInfo.kind === 'fiat' ? { amount: listing.priceInfo.amount, currency: listing.priceInfo.currency, rate: quote.rate, at: quote.at, source: quote.source } : null;
+  const id = app.dm.ensureThread(listing.pubkey, listing.address, { title: `Order: ${listing.title}`.slice(0, 60) });
+  const orderId = crypto.randomUUID();
+  setMeta(app, id, { listingRef: listing.address, title: listing.title, price: quote.sats, fiat, seller: listing.pubkey, orderId, role: 'buyer', startedAt: Math.floor(Date.now() / 1000), standardDm: true });
+  let delivered = true;
+  try { await app.dm.sendMessage(id, requestRumor({ orderId, listingRef: listing.address, amount: quote.sats, title: listing.title, fiat })); }
+  catch (error) { delivered = false; setMeta(app, id, { requestError: error.message }); }
+  app.selectedGroup = id; app.emit('dm');
+  return { id, delivered };
 }
