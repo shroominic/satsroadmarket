@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#000000">
+    <meta name="description" content="SatsRoad Market: public listings, private encrypted conversation, and ecash on Nostr.">
+    <title>SatsRoad Market — private marketplace</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <script type="module" crossorigin src="/assets/index-CvMTQCan.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-1M2jIiW1.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#view">Skip to content</a>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="#/market" aria-label="SatsRoad private marketplace, home">
+          <img class="brand-logo" src="/satsroad-logo-crop.jpg" width="1060" height="560" alt="SatsRoad — private marketplace, pixel camel with rider">
+        </a>
+        <div class="header-right" id="status-row" role="status" aria-live="polite">
+          <button type="button" class="st" id="marmot-status" aria-haspopup="true" aria-expanded="false" aria-controls="status-pop" aria-label="Marmot messaging status"><i class="dot-s dot-s-wait" data-s="wait" aria-hidden="true"></i><span class="st-label">Marmot</span> <span class="st-num"></span></button>
+          <button type="button" class="st" id="relay-status" aria-haspopup="true" aria-expanded="false" aria-controls="status-pop" aria-label="Listing relays status"><i class="dot-s dot-s-wait" data-s="wait" aria-hidden="true"></i><span class="st-label">Listings</span> <span class="st-num">…</span></button>
+          <button type="button" class="st st-who" id="who" aria-haspopup="true" aria-expanded="false" aria-controls="status-pop" aria-label="Identity"><i class="dot-s dot-s-none" aria-hidden="true"></i><span class="st-label">no identity</span></button>
+          <div class="popover" id="status-pop" hidden></div>
+        </div>
+      </div>
+      <nav class="main-nav" aria-label="Main">
+        <a data-nav="market" href="#/market">Marketplace</a>
+        <a data-nav="sell" href="#/sell">Sell</a>
+        <a data-nav="chats" href="#/chats">Conversations</a>
+        <a data-nav="identity" href="#/identity">Identity &amp; relays</a>
+      </nav>
+    </header>
+    <div id="mode-banner" class="mode-banner" role="note"></div>
+    <noscript><p class="noscript">SatsRoad Market needs JavaScript: keys, relays and encryption all run in your browser.</p></noscript>
+    <main id="view" class="page" tabindex="-1"></main>
+    <footer class="site-footer">
+      <span>SatsRoad Market &bull; Browse publicly. Talk privately. Pay with ecash.</span>
+      <span>Listings are NIP-99 (Shopstr-compatible). Chats are Marmot/MLS. Payments are Cashu.</span>
+    </footer>
+  </body>
+</html>
