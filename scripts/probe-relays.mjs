@@ -1,8 +1,12 @@
 // Probe public relays with the real marmot module. Usage: node scripts/probe-relays.mjs wss://a wss://b ...
+process.on('uncaughtException', (e) => console.error('uncaught:', String(e.message).slice(0, 120)));
+process.on('unhandledRejection', (e) => console.error('unhandled:', String(e?.message || e).slice(0, 120)));
 // Per relay: ~14 events (2 key packages/relay lists, commit, welcome, 2 messages, 1 listing, 1 raw 443).
 import 'fake-indexeddb/auto';
 import { generateSecretKey, finalizeEvent, getPublicKey } from 'nostr-tools/pure';
 import { SimplePool } from 'nostr-tools/pool';
+import { deleteTestEvents } from './e2e-cleanup.mjs';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { createMarmot } from '../src/lib/marmot.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -36,12 +40,16 @@ async function probe(url) {
       }
     }
     // listing 30402 + raw 443 (legacy key package kind)
-    const listing = finalizeEvent({ kind: 30402, created_at: Math.floor(Date.now() / 1000), tags: [['d', 'probe-' + Date.now()], ['title', 'probe'], ['summary', 'probe'], ['price', '1', 'SAT'], ['t', 'shopstr']], content: 'probe listing, please ignore' }, sellerKey);
+    const listing = finalizeEvent({ kind: 30402, created_at: Math.floor(Date.now() / 1000), tags: [['d', 'probe-' + Date.now()], ['title', '[test] probe listing, ignore'], ['summary', 'probe'], ['price', '1', 'SAT'], ['t', 'shopstr']], content: 'probe listing, please ignore' }, sellerKey);
     await timed('listing 30402 publish+read', async () => { await Promise.any(pool.publish([url], listing)); await sleep(500); const evs = await pool.querySync([url], { kinds: [30402], ids: [listing.id] }); return { ok: evs.length === 1 }; }, out);
     const raw443 = finalizeEvent({ kind: 443, created_at: Math.floor(Date.now() / 1000), tags: [['encoding', 'base64']], content: 'AAAA' }, sellerKey);
     await timed('legacy 443 publish', async () => { await Promise.any(pool.publish([url], raw443)); return { ok: true, note: 'accepted (444 is only ever inside a 1059 wrap)' }; }, out);
   } catch (e) { out.fatal = { ok: false, note: e.message }; }
-  finally { clients.forEach((c) => { try { c.stop(); } catch {} }); pool.destroy(); }
+  finally {
+    clients.forEach((c) => { try { c.stop(); } catch {} }); pool.destroy();
+    // teardown: delete our own listing / key package / raw 443 (NIP-09 + empty replacement), then verify
+    try { out.cleanup = { ok: true, ms: 0, note: JSON.stringify(await deleteTestEvents({ keys: [bytesToHex(sellerKey)], relays: [url] })).slice(0, 200) }; } catch (e) { out.cleanup = { ok: null, ms: 0, note: 'cleanup error ' + e.message.slice(0, 80) }; }
+  }
   return out;
 }
 

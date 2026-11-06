@@ -34,3 +34,21 @@ test('custom keyword lists are honoured', () => {
   assert.equal(findBlocked('limited edition widget', ['widget']), 'widget');
   assert.equal(findBlocked('cocaine', ['widget']), null);
 });
+
+import { parseKeywordInput, loadKeywords, saveKeywords, resetKeywords, nsfwEnabled, setNsfwEnabled, DEFAULT_BLOCKED } from '../src/lib/filter.js';
+const memStore = () => { const m = new Map(); return { get: (k) => m.get(k) ?? null, set: (k, v) => m.set(k, v), del: (k) => m.delete(k), getJSON: (k, f) => (m.has(k) ? JSON.parse(m.get(k)) : f), setJSON: (k, v) => m.set(k, JSON.stringify(v)) }; };
+test('NSFW keywords: input parsing trims, lowercases, dedupes, splits on commas/newlines', () => {
+  assert.deepEqual(parseKeywordInput(' Foo, bar ,FOO\nbaz,, '), ['foo', 'bar', 'baz']); assert.deepEqual(parseKeywordInput(''), []); assert.deepEqual(parseKeywordInput('x'.repeat(41)), []);
+});
+test('NSFW keywords: starts as a copy of defaults, edits persist separately, reset restores defaults', () => {
+  const st = memStore(); assert.deepEqual(loadKeywords(st), DEFAULT_BLOCKED); assert.notEqual(loadKeywords(st), DEFAULT_BLOCKED);
+  saveKeywords(st, ['alpha', 'beta']); assert.deepEqual(loadKeywords(st), ['alpha', 'beta']);
+  assert.ok(findBlocked('selling alpha today', loadKeywords(st))); assert.equal(findBlocked('cocaine here', loadKeywords(st)), null, 'user removed defaults stay removed');
+  assert.deepEqual(resetKeywords(st), DEFAULT_BLOCKED); assert.deepEqual(loadKeywords(st), DEFAULT_BLOCKED);
+  assert.equal(nsfwEnabled(st), true); setNsfwEnabled(st, false); assert.equal(nsfwEnabled(st), false);
+  const bad = { getJSON() { throw new Error('blocked'); }, get() { throw new Error('blocked'); } }; assert.deepEqual(loadKeywords(bad), DEFAULT_BLOCKED); assert.equal(nsfwEnabled(bad), true);
+});
+test('NSFW keywords: whole-word matching limits false positives for short words', () => {
+  assert.equal(findBlocked('Methodology of cooking', ['meth']), null); assert.equal(findBlocked('lsdesign studio', ['lsd']), null);
+  assert.ok(findBlocked('pure meth for sale', ['meth'])); assert.equal(findBlocked('weed whacker', ['cannabis']), null);
+});

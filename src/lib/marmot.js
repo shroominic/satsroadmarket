@@ -30,10 +30,10 @@ export class MarmotError extends Error {
  * Nostr network for marmot-ts over a nostr-tools SimplePool.
  * Every publish is reported per relay; failures are `{ok:false}` with the relay's/transport's reason.
  */
-export function createMarmotNetwork(pool, fallbackRelays, { onError = () => {}, onPublish = () => {}, publishTimeout = 5000 } = {}) {
+export function createMarmotNetwork(pool, fallbackRelays, { onError = () => {}, onPublish = () => {}, publishTimeout = 12000 } = {}) {
   return {
     async publish(relays, event) {
-      const settled = await Promise.allSettled(pool.publish(relays, event, { maxWait: publishTimeout }));
+      const settled = await Promise.allSettled(pool.publish(relays, event, { maxWait: publishTimeout, connectionTimeout: 15000 }));
       const result = Object.fromEntries(settled.map((r, i) => {
         const message = r.status === 'fulfilled' ? String(r.value ?? '') : String(r.reason?.message ?? r.reason);
         // A timeout means we do not know whether the relay stored it.
@@ -51,21 +51,33 @@ export function createMarmotNetwork(pool, fallbackRelays, { onError = () => {}, 
     subscription(relays, filters) {
       return { subscribe(observer) {
         let closed = false, subs = [], timer, attempt = 0;
+        const canRun = () => (typeof navigator === 'undefined' || navigator.onLine !== false) && (typeof document === 'undefined' || !document.hidden);
+        const schedule = () => {
+          clearTimeout(timer);
+          // exponential backoff with jitter, capped at 60 s; never hammer relays while offline or while the tab is hidden
+          const delay = Math.min(1000 * 2 ** Math.min(attempt, 6), 60000) * (0.5 + Math.random());
+          attempt++;
+          timer = setTimeout(() => { if (closed) return; if (!canRun()) { waiting = true; return; } subs.forEach(s => { try { s.close(); } catch {} }); open(); }, delay);
+        };
+        let waiting = false;
+        const resume = () => { if (closed || !waiting || !canRun()) return; waiting = false; attempt = 0; clearTimeout(timer); subs.forEach(s => { try { s.close(); } catch {} }); open(); };
+        if (typeof window !== 'undefined') { window.addEventListener('online', resume); document.addEventListener('visibilitychange', resume); }
         const open = () => {
           subs = asFilters(filters).map(f => pool.subscribeMany(relays, f, {
+            maxWait: 15000, // connection timeout (the pool default of 3 s is too short on slow or mobile networks)
             onevent: e => { attempt = 0; observer.next?.(e); },
             onclose: reasons => {
               if (closed) return;
-              // nostr-tools does not resubscribe after a failed connect: do it ourselves with backoff.
-              const err = new Error(`Relay subscription closed: ${JSON.stringify(reasons)}; reconnecting`);
+              const list = (Array.isArray(reasons) ? reasons : []).map(r => (typeof r === 'string' ? { reason: r } : r));
+              const err = new Error(`Cannot reach messaging relays; retrying`);
+              err.code = 'RELAY_SUBSCRIPTION_CLOSED'; err.reasons = list; err.attempt = attempt;
               onError(err);
-              clearTimeout(timer);
-              timer = setTimeout(() => { if (!closed) { subs.forEach(s => { try { s.close(); } catch {} }); open(); } }, Math.min(500 * 2 ** attempt++, 10000));
+              schedule();
             },
           }));
         };
         open();
-        return { unsubscribe: () => { closed = true; clearTimeout(timer); subs.forEach(s => { try { s.close(); } catch {} }); } };
+        return { unsubscribe: () => { closed = true; clearTimeout(timer); subs.forEach(s => { try { s.close(); } catch {} }); if (typeof window !== 'undefined') { window.removeEventListener('online', resume); document.removeEventListener('visibilitychange', resume); } } };
       } };
     },
     async getUserInboxRelays(pubkey) {
@@ -95,7 +107,7 @@ function emitter() {
  * @param {(pubkey:string,name:string)=>object} [o.storeFactory]  returns a GenericKeyValueStore (getItem/setItem/removeItem/clear/keys); default localforage
  * @param {object} [o.network]              override the NostrNetworkInterface (tests)
  */
-export async function createMarmot({ privateKey, relays: rawRelays, storeFactory = localforageStoreFactory, network: suppliedNetwork, clientName = 'satsroad-market' }) {
+export async function createMarmot({ privateKey, relays: rawRelays, storeFactory = localforageStoreFactory, network: suppliedNetwork, pool: sharedPool, clientName = 'satsroad-market' }) {
   if (!rawRelays?.length) throw new MarmotError('NO_RELAYS', 'At least one relay is required.');
   const relays = [...new Set(rawRelays.map(normalizeURL))]; // result keys are normalized URLs (trailing slash)
   const signer = PrivateKeySigner.fromKey(privateKey);
@@ -104,7 +116,8 @@ export async function createMarmot({ privateKey, relays: rawRelays, storeFactory
   const emitError = e => bus.emit('error', e);
   const publishLog = [];
 
-  const pool = suppliedNetwork ? null : new SimplePool({ enableReconnect: true });
+  const ownsPool = !suppliedNetwork && !sharedPool;
+  const pool = suppliedNetwork ? null : (sharedPool || new SimplePool({ enableReconnect: true, enablePing: true, maxWaitForConnection: 15000 }));
   const baseNetwork = suppliedNetwork || createMarmotNetwork(pool, relays, { onError: emitError });
   // Record every publish with its per-relay result, so failures are visible even when marmot-ts throws.
   const network = Object.create(baseNetwork);
@@ -209,7 +222,7 @@ export async function createMarmot({ privateKey, relays: rawRelays, storeFactory
       started = false;
       inviteSub?.unsubscribe(); groupsSub?.unsubscribe();
       for (const g of client.groups.loaded) g.removeAllListeners?.();
-      pool?.destroy();
+      if (ownsPool) pool?.destroy(); // a shared pool belongs to the app
     },
 
     /**

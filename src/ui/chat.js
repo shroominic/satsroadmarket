@@ -1,4 +1,7 @@
-import { cashu } from './adapters.js';
+import { cashu, isTestMint } from './adapters.js';
+import { DEV_FEATURES } from '../lib/flags.js';
+import { minAcceptableSats } from '../lib/money.js';
+import { fetchListingDms } from '../marketplace/dm.js';
 import { h, ago, sats, notice, button, busy } from './dom.js';
 import { deriveOrder, parsePaymentTags, receiptRumor, requestRumor, shippedRumor, SUBJECT } from '../marketplace/orders.js';
 import { shortKey, storage, npubOf } from '../lib/nostr.js';
@@ -13,12 +16,15 @@ const tagOf = (r, name) => r.tags?.find((t) => t[0] === name);
 export async function startConversation(app, listing) {
   if (!app.marmot) throw new Error(`Private messaging is not running${app.marmotState.error ? `: ${app.marmotState.error}` : '.'}`);
   if (listing.price == null) throw new Error('This listing has no price, so an order cannot be started.');
+  // Price the order in sats now: a fresh rate or a hard error, never a guess. Fiat price and rate travel in the order message.
+  const quote = await app.rates.quote(listing.priceInfo);
+  const fiat = listing.priceInfo.kind === 'fiat' ? { amount: listing.priceInfo.amount, currency: listing.priceInfo.currency, rate: quote.rate, at: quote.at, source: quote.source } : null;
   const out = await app.marmot.startConversation(listing.pubkey, { listingRef: listing.address, label: `Order: ${listing.title}`.slice(0, 60) });
   const groupId = out?.id ?? out?.groupId;
   if (!groupId) throw new Error('The Marmot module did not return a group id.');
   const orderId = crypto.randomUUID();
-  setMeta(app, groupId, { listingRef: listing.address, title: listing.title, price: listing.price, seller: listing.pubkey, orderId, role: 'buyer', startedAt: Math.floor(Date.now() / 1000), inviteUndelivered: out.delivered === false, requestSent: false });
-  try { await app.marmot.sendMessage(groupId, requestRumor({ orderId, listingRef: listing.address, amount: listing.price, title: listing.title })); setMeta(app, groupId, { requestSent: true }); }
+  setMeta(app, groupId, { listingRef: listing.address, title: listing.title, price: quote.sats, fiat, seller: listing.pubkey, orderId, role: 'buyer', startedAt: Math.floor(Date.now() / 1000), inviteUndelivered: out.delivered === false, requestSent: false });
+  try { await app.marmot.sendMessage(groupId, requestRumor({ orderId, listingRef: listing.address, amount: quote.sats, title: listing.title, fiat })); setMeta(app, groupId, { requestSent: true }); }
   catch (error) { setMeta(app, groupId, { requestError: error.message }); }
   app.selectedGroup = groupId;
   app.emit('marmot');
@@ -43,11 +49,31 @@ export function mountChats(root, app) {
   const composer = h('div', { class: 'composer' }, draft, sendBtn);
   threadBox.append(head, timelineBox, msgBox, actionBox, payBox, sendStatus, composer);
   msgBox.hidden = true; composer.hidden = true;
-  root.replaceChildren(banner, h('div', { class: 'chat-layout' }, h('aside', { class: 'chat-side' }, inviteBox, h('h3', { class: 'side-title' }, 'Conversations'), listBox), threadBox));
+  const dmBox = h('div', { class: 'dm-inbox' });
+  root.replaceChildren(banner, dmBox, h('div', { class: 'chat-layout' }, h('aside', { class: 'chat-side' }, inviteBox, h('h3', { class: 'side-title' }, 'Conversations'), listBox), threadBox));
 
   const me = () => app.identity.pubkey;
   let listSig = ''; let threadSig = '';
   let groups = []; let invites = []; let current = null; // current: {group, rumors, order, meta, role}
+
+  /* NIP-17 inbox: buyers who could not start Marmot because we have no key package */
+  let dms = []; let dmLoading = false; let dmErr = '';
+  function drawDms() {
+    const kp = app.keyPackage;
+    const dsig = JSON.stringify([dms.map((m) => m.id), dmErr, kp.status, kp.error]); if (dsig === dmBox.__sig) return; dmBox.__sig = dsig;
+    if (!dms.length && !dmErr) { dmBox.replaceChildren(); return; }
+    const publishBtn = button('Publish my key package now', async function () { await busy(this, 'Publishing…', () => app.publishKeyPackage()); drawDms(); }, { cls: 'btn-primary btn-small' });
+    dmBox.replaceChildren(h('section', { class: 'panel inner' }, h('div', { class: 'panel-title' }, h('span', {}, `Direct messages about your listings (${dms.length})`), button('refresh', () => loadDms(), { cls: 'btn-link' })),
+      h('div', { class: 'panel-body' }, dmErr ? notice('error', dmErr) : null,
+        h('p', { class: 'small quiet' }, 'These are ordinary NIP-17 direct messages, not Marmot. Publish your key package so the buyer can start a private, end-to-end encrypted conversation with you.'),
+        ...dms.slice(0, 20).map((m) => h('div', { class: 'msg msg-them' }, h('div', { class: 'msg-meta' }, shortKey(npubOf(m.from)), ' · ', ago(m.created_at), ' · ', app.listings.find((l) => l.address === m.listingRef)?.title || m.listingRef.slice(0, 30)), h('div', { class: 'text' }, m.text))),
+        h('div', { class: 'actions' }, publishBtn, kp.status === 'ok' ? h('span', { class: 'pill pill-ok' }, 'KEY PACKAGE PUBLISHED') : kp.status === 'error' ? notice('error', `Key package not published: ${kp.error}`) : null))));
+  }
+  async function loadDms() {
+    if (dmLoading || !alive) return; dmLoading = true;
+    try { dms = await fetchListingDms({ app }); dmErr = ''; } catch (e) { dmErr = `Could not load direct messages: ${e.message}`; }
+    dmLoading = false; if (alive) drawDms();
+  }
 
   async function loadLists() {
     if (!app.marmot) return;
@@ -127,7 +153,7 @@ export function mountChats(root, app) {
       notes.push(notice('warn', 'The seller’s invite (Welcome) was not confirmed as delivered. They cannot read this conversation until it arrives.', retry), slot);
     }
     if (role === 'buyer' && meta.orderId && !order.steps[1].done) {
-      const retry = button('Resend order request', async () => { try { await busy(retry, 'Sending…', () => app.marmot.sendMessage(id, requestRumor({ orderId: meta.orderId, listingRef: meta.listingRef, amount: meta.price, title: meta.title }))); setMeta(app, id, { requestError: '' }); await openGroup(id); } catch (e) { sendStatus.replaceChildren(notice('error', `Order request not sent: ${e.message}`)); } }, { cls: 'btn-small' });
+      const retry = button('Resend order request', async () => { try { await busy(retry, 'Sending…', () => app.marmot.sendMessage(id, requestRumor({ orderId: meta.orderId, listingRef: meta.listingRef, amount: meta.price, title: meta.title, fiat: meta.fiat }))); setMeta(app, id, { requestError: '' }); await openGroup(id); } catch (e) { sendStatus.replaceChildren(notice('error', `Order request not sent: ${e.message}`)); } }, { cls: 'btn-small' });
       notes.push(notice('warn', `The order request has not been sent${meta.requestError ? ` (${meta.requestError})` : ''}.`, retry));
     }
     if (current.outbox?.length) {
@@ -162,7 +188,7 @@ export function mountChats(root, app) {
       sendStatus.replaceChildren(notice('info', 'Contacting the mint…'));
       const { id, order } = current;
       let result;
-      try { result = await busy(btn, 'Redeeming…', () => cashu.redeem(payment, { orderId: order.orderId, expectedAmount: order.amount || undefined })); }
+      try { result = await busy(btn, 'Redeeming…', () => cashu.redeem(payment, { orderId: order.orderId, expectedAmount: order.amount ? minAcceptableSats(order.amount, !!order.fiat) : undefined })); }
       catch (error) {
         storage.setJSON(redeemKey(app, id), { state: 'failed', error: error.message, at: Math.floor(Date.now() / 1000) });
         sendStatus.replaceChildren(notice('error', `Redemption failed: ${error.message} The order is NOT marked paid.`));
@@ -196,12 +222,14 @@ export function mountChats(root, app) {
     const mintUrl = h('input', { type: 'url', value: cashu.mintUrl(), 'aria-label': 'Mint URL' });
     const balance = h('span', { class: 'small quiet' }, 'wallet balance: …');
     const refreshBalance = async () => { try { balance.textContent = `wallet balance at this mint: ${sats(await cashu.balance(mintUrl.value.trim()))}`; } catch (e) { balance.textContent = `wallet balance unavailable (${e.message})`; } };
-    refreshBalance(); mintUrl.addEventListener('change', refreshBalance);
-    const fund = button('Fund test wallet', async function () {
-      status.replaceChildren(notice('info', 'Minting test ecash (local FakeWallet mints only)…'));
+    refreshBalance();
+    const fund = !DEV_FEATURES ? h('span', {}) : button('Fund TEST wallet (fake sats)', async function () {
+      status.replaceChildren(notice('info', 'Minting TEST ecash (fake sats, no value)…'));
       try { await busy(this, 'Minting…', () => cashu.fundTestWallet(mintUrl.value.trim(), Math.max(expected || 0, 1000))); cashu.setMintUrl(mintUrl.value.trim()); status.replaceChildren(notice('ok', 'Test wallet funded.')); refreshBalance(); }
-      catch (error) { status.replaceChildren(notice('error', `Could not fund the wallet: ${error.message} Only a local FakeWallet mint (npm run mint) auto-pays; a real mint needs a Lightning payment.`)); }
-    }, { cls: 'btn-small', title: 'Test only: works against a local FakeWallet mint' });
+      catch (error) { status.replaceChildren(notice('error', `Could not fund the wallet: ${error.message} Only test mints auto-pay; a real mint needs a Lightning payment that you make yourself (docs/MINTS.md).`)); }
+    }, { cls: 'btn-small', title: 'Test mints only (testnut.cashu.space or local FakeWallet). Sats have no value.' });
+    const syncFund = () => { fund.hidden = !isTestMint(mintUrl.value.trim()); };
+    mintUrl.addEventListener('change', () => { refreshBalance(); syncFund(); }); syncFund();
     const make = button('Create token from wallet', async function () {
       status.replaceChildren(notice('info', 'Swapping proofs at the mint…'));
       try { const out = await busy(this, 'Swapping…', () => cashu.makeToken({ mintUrl: mintUrl.value.trim(), amount: expected, orderId: order.orderId || meta.orderId })); cashu.setMintUrl(mintUrl.value.trim()); tokenIn.value = out.token; status.replaceChildren(notice('ok', `Token for ${sats(out.amount)} created and removed from your wallet. Send it now; if sending fails, the token stays in the box above.`)); refreshBalance(); }
@@ -219,8 +247,9 @@ export function mountChats(root, app) {
       } catch (error) { status.replaceChildren(notice('error', `Payment not sent: ${error.message}${error.code === 'NO_RELAY_ACK' ? ' The payment message is saved on this device; use “Retry delivery” in the conversation. The token is still in the box above: do not discard it.' : ''}`)); if (error.code === 'NO_RELAY_ACK') await openGroup(id); }
     }, { cls: 'btn-primary' });
     payBox.replaceChildren(h('div', { class: 'panel inner' }, h('div', { class: 'panel-title' }, h('span', {}, `Pay ${expected ? sats(expected) : ''} with ecash`), button('close', () => payBox.replaceChildren(), { cls: 'btn-link' })),
+      (meta.fiat || order.fiat) ? h('p', { class: 'small', 'data-testid': 'rate-line' }, `Listed at ${(order.fiat || meta.fiat).amount} ${(order.fiat || meta.fiat).currency}. Rate used when the order was made: ${(order.fiat || meta.fiat).rate || '?'} ${(order.fiat || meta.fiat).currency}/BTC${meta.fiat?.source ? ` (${meta.fiat.source})` : ''}. You pay exactly ${sats(expected)}; the seller accepts up to 2% less to allow for rate movement.`) : null,
       h('p', { class: 'small quiet' }, 'The token is sent only inside this end-to-end encrypted group, never as a public event. It is a bearer token: whoever holds it can spend it. It is NOT paid until the seller redeems it at the mint.'),
-      h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Mint'), mintUrl), h('div', { class: 'row-inline' }, balance, fund, make),
+      h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Mint'), mintUrl), h('div', { class: 'row-inline' }, balance, fund, make), h('p', { class: 'small quiet' }, 'Need funds? Identity → Ecash wallet → Add funds (Lightning) or Receive token.'),
       tokenIn, h('div', { class: 'actions' }, sendPay), status));
   }
 
@@ -245,8 +274,9 @@ export function mountChats(root, app) {
     if (app.selectedGroup && app.marmot) await openGroup(app.selectedGroup);
   }
   head.replaceChildren(h('p', { class: 'quiet' }, 'Select a conversation.'));
-  tick();
+  tick(); loadDms();
   const offs = [app.on('marmot', () => { if (alive) tick(); }), app.on('identity', () => {})];
+  const dmTimer = setInterval(() => { if (alive && !document.hidden) loadDms(); }, 20000);
   timer = setInterval(() => { if (alive && app.marmot && !document.hidden) { loadLists(); if (app.selectedGroup) openGroup(app.selectedGroup); } }, 5000);
-  return () => { alive = false; clearInterval(timer); offs.forEach((o) => o()); };
+  return () => { alive = false; clearInterval(timer); clearInterval(dmTimer); offs.forEach((o) => o()); };
 }

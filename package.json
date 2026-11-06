@@ -10,7 +10,9 @@
     "test": "node --test test/*.mjs",
     "relay": "node scripts/local-relay.mjs",
     "mint": "bash scripts/local-mint.sh",
-    "deploy": "npm run build && wrangler pages deploy dist --project-name satsroadmarket"
+    "deploy": "npm run build && wrangler pages deploy dist --project-name satsroadmarket",
+    "build:e2e": "VITE_E2E=1 vite build --outDir ${E2E_OUT:-/tmp/satsroad-e2e-dist} --emptyOutDir",
+    "preview:e2e": "vite preview --outDir ${E2E_OUT:-/tmp/satsroad-e2e-dist} --host 127.0.0.1 --port 4173"
   },
   "dependencies": {
     "@cashu/cashu-ts": "^4.13.0",
@@ -19,6 +21,7 @@
     "applesauce-signers": "^7.0.1",
     "localforage": "^1.10.0",
     "nostr-tools": "^2.25.5",
+    "qrcode-generator": "^2.0.4",
     "ws": "^8.22.1"
   },
   "devDependencies": {

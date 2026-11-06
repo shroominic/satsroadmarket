@@ -20,13 +20,13 @@ function explain(error) {
 }
 const guard = (fn) => async (...args) => { try { return await fn(...args); } catch (error) { throw explain(error); } };
 
-export async function startMarmot({ privateKey, relays, onChange = () => {}, onError = () => {} }) {
+export async function startMarmot({ privateKey, relays, pool, onChange = () => {}, onError = () => {} }) {
   let mod;
   try { mod = await import('../lib/marmot.js'); }
   catch (error) { throw new Error(`The Marmot module failed to load: ${error.message}`); }
   if (typeof mod.createMarmot !== 'function') throw new Error('src/lib/marmot.js does not export createMarmot.');
   let m;
-  try { m = await mod.createMarmot({ privateKey, relays }); } catch (error) { throw explain(error); }
+  try { m = await mod.createMarmot({ privateKey, relays, pool }); } catch (error) { throw explain(error); }
   const unsubs = [];
   for (const name of ['invite', 'group', 'message', 'change']) unsubs.push(m.on?.(name, () => onChange(name)));
   unsubs.push(m.on?.('error', onError));
@@ -60,7 +60,8 @@ export async function startMarmot({ privateKey, relays, onChange = () => {}, onE
 }
 
 /* ---------------- Cashu ---------------- */
-import { storage } from '../lib/nostr.js';
+import { storage, isLocalMode } from '../lib/nostr.js';
+import { DEV_FEATURES } from '../lib/flags.js';
 
 let cashuModule; let walletStore;
 async function cashuMod() {
@@ -71,9 +72,25 @@ async function cashuMod() {
 const need = (mod, name) => { if (typeof mod[name] !== 'function') throw new Error(`The ecash module has no ${name}()${mod.loadError ? ` (load error: ${mod.loadError})` : ''}.`); return mod[name]; };
 const walletOf = async (mod) => (walletStore ||= await need(mod, 'createDefaultStore')());
 const MINT_KEY = 'sr.mint';
-export const defaultMint = () => storage.get(MINT_KEY) || 'http://127.0.0.1:3338';
+export const MINIBITS_MINT = 'https://mint.minibits.cash/Bitcoin';
+export const TEST_MINT = DEV_FEATURES ? 'https://testnut.cashu.space' : '';
+/** Second public test mint, used to demonstrate "wrong mint" rejections. */
+export const OTHER_TEST_MINT = DEV_FEATURES ? 'https://nofees.testnut.cashu.space' : '';
+export const LOCAL_MINT = DEV_FEATURES ? 'http://127.0.0.1:3338' : '';
+const MINTS_KEY = 'sr.mints';
+const clean = (u) => String(u || '').trim().replace(/\/+$/, '');
+const isHttps = (u) => { try { return new URL(u).protocol === 'https:'; } catch { return false; } };
+export const defaultMint = () => (DEV_FEATURES ? storage.get(MINT_KEY) : (isHttps(storage.get(MINT_KEY)) ? storage.get(MINT_KEY) : '')) || (isLocalMode() ? LOCAL_MINT : MINIBITS_MINT);
+/** Mints a seller accepts. The primary mint is always in the list. */
+export const allowedMints = () => [...new Set([clean(defaultMint()), ...storage.getJSON(MINTS_KEY, []).map(clean)].filter(Boolean))];
+export const setAllowedMints = (list) => storage.setJSON(MINTS_KEY, [...new Set(list.map(clean).filter(Boolean))]);
+/** Mints whose Lightning backend auto-pays (fake sats, no value). Only these can be funded from the UI. */
+export const isTestMint = (url) => { if (!DEV_FEATURES) return false; try { const u = new URL(url); return u.hostname === 'testnut.cashu.space' || u.hostname.endsWith('.testnut.cashu.space') || ['127.0.0.1', 'localhost'].includes(u.hostname); } catch { return false; } };
 
 export const cashu = {
+  createMintQuote: async (mintUrl, amount) => { const m = await cashuMod(); return need(m, 'createMintQuote')(mintUrl, amount); },
+  checkAndMintQuote: async (mintUrl, amount, quoteId) => { const m = await cashuMod(); return need(m, 'checkAndMintQuote')(mintUrl, amount, quoteId, { store: await walletOf(m) }); },
+  receiveToken: async (token) => { const m = await cashuMod(); return need(m, 'receiveIntoWallet')(token, { store: await walletOf(m) }); },
   async preload() { await cashuMod(); },
   mintUrl: defaultMint,
   setMintUrl(url) { storage.set(MINT_KEY, url); },
@@ -81,7 +98,9 @@ export const cashu = {
   async inspect(token) { const m = await cashuMod(); return need(m, 'inspectCashuToken')(token); },
   async balance(mintUrl) { const m = await cashuMod(); return need(m, 'getBalance')(await walletOf(m), mintUrl); },
   /** TEST ONLY: the module mints from an auto-paying FakeWallet mint; a real mint will time out. */
-  async fundTestWallet(mintUrl, amount) { const m = await cashuMod(); return need(m, 'fundTestWallet')(mintUrl, amount, { store: await walletOf(m) }); },
+  async fundTestWallet(mintUrl, amount) {
+    if (!isTestMint(mintUrl)) throw new Error('Funding is done with a Lightning invoice from the Identity page.');
+    const m = await cashuMod(); return need(m, 'fundTestWallet')(mintUrl, amount, { store: await walletOf(m) }); },
   /** Swap proofs from this browser's wallet into a sendable token (change is kept in the wallet). */
   async makeToken({ mintUrl, amount, orderId }) { const m = await cashuMod(); const out = await need(m, 'payFromStore')(await walletOf(m), mintUrl, amount, { orderId }); return { token: out.token, amount: out.amount }; },
   async paymentRumor({ token, orderId, listingRef, amount, buyerPubkey }) {
@@ -101,7 +120,7 @@ export const cashu = {
   async redeem(payment, { orderId, expectedAmount } = {}) {
     const m = await cashuMod();
     const mint = defaultMint();
-    const result = await need(m, 'redeem')(payment.token, mint, { store: await walletOf(m), allowedMints: [mint], orderId, expectedAmount });
+    const result = await need(m, 'redeem')(payment.token, mint, { store: await walletOf(m), allowedMints: allowedMints(), orderId, expectedAmount });
     if (result?.status !== 'redeemed') {
       const labels = { already_spent: 'Already spent', duplicate: 'Duplicate token', wrong_mint: 'Mint not accepted', amount_mismatch: 'Wrong amount', mint_unreachable: 'Mint unreachable', invalid: 'Invalid token' };
       throw new Error(`${labels[result?.status] || 'Redemption failed'}: ${result?.reason || 'the mint did not accept the token.'}`);

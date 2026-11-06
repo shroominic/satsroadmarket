@@ -167,6 +167,12 @@ export async function fundTestWallet(mintUrl, amount, { store, timeoutMs = TIMEO
   const wallet = await loadWallet(mint, timeoutMs);
   const quote = await withTimeout(wallet.createMintQuoteBolt11(amount), timeoutMs);
   let proofs;
+  // Poll the quote state first (GET, 200) so we do not spam the mint with 400 "quote not paid" mint requests.
+  for (let i = 0; i < 20; i++) {
+    let st; try { st = await withTimeout(wallet.checkMintQuoteBolt11(quote.quote), timeoutMs); } catch { break; }
+    if (st?.state === 'PAID' || st?.state === 'ISSUED') break;
+    await new Promise((r) => setTimeout(r, 400));
+  }
   for (let i = 0; ; i++) {
     try { proofs = await withTimeout(wallet.mintProofsBolt11(amount, quote.quote), timeoutMs); break; }
     catch (e) {
@@ -344,4 +350,39 @@ export async function redeem(token, mintUrl, opts = {}) {
   } finally {
     Ys.forEach((y) => inflight.delete(y));
   }
+}
+
+/* ---------- real-money funding (NUT-04). This module NEVER pays an invoice; the user pays it from their own Lightning wallet. ---------- */
+/** Ask the mint for a Lightning invoice for `amount` sat. Returns {quote, request (bolt11), expiry, amount}. */
+export async function createMintQuote(mintUrl, amount, { timeoutMs = TIMEOUT_MS } = {}) {
+  const mint = normalizeMintUrl(mintUrl);
+  if (!Number.isSafeInteger(amount) || amount < 1) throw new Error('Enter a whole number of sats (at least 1).');
+  const wallet = await loadWallet(mint, timeoutMs);
+  const q = await withTimeout(wallet.createMintQuoteBolt11(amount), timeoutMs);
+  return { mint, quote: q.quote, request: q.request, expiry: q.expiry ?? null, amount, state: q.state };
+}
+/** Check the quote once. If the invoice is PAID, mint the proofs, save them and return {state:'ISSUED', amount}. Otherwise {state}. */
+export async function checkAndMintQuote(mintUrl, amount, quoteId, { store, timeoutMs = TIMEOUT_MS } = {}) {
+  const mint = normalizeMintUrl(mintUrl);
+  const wallet = await loadWallet(mint, timeoutMs);
+  const st = await withTimeout(wallet.checkMintQuoteBolt11(quoteId), timeoutMs);
+  if (st.state === 'ISSUED') return { state: 'ISSUED', amount: 0, note: 'Already issued (proofs were stored earlier or elsewhere).' };
+  if (st.state !== 'PAID') return { state: st.state, expiry: st.expiry ?? null };
+  const proofs = await withTimeout(wallet.mintProofsBolt11(amount, quoteId), timeoutMs);
+  const plain = proofs.map(toPlainProof);
+  if (store) await withLock(store, async () => saveProofs(store, mint, [...(await loadProofs(store, mint)), ...plain]));
+  return { state: 'ISSUED', amount: sum(plain), balance: store ? await getBalance(store, mint) : sum(plain) };
+}
+/** Receive a pasted cashuB/cashuA token into this browser's wallet (swap at the mint, keep the new proofs). */
+export async function receiveIntoWallet(token, { store, timeoutMs = TIMEOUT_MS } = {}) {
+  let meta; try { meta = getTokenMetadata(String(token || '').trim()); } catch { throw new Error('That does not look like a Cashu token.'); }
+  if (meta.unit !== 'sat') throw new Error('Only sat tokens are supported.');
+  const mint = safeMint(meta.mint); if (!mint) throw new Error('The token has a bad mint URL.');
+  const wallet = await loadWallet(mint, timeoutMs);
+  let received;
+  try { received = await withTimeout(wallet.receive(String(token).trim()), timeoutMs); }
+  catch (e) { throw new Error(e instanceof MintOperationError && e.code === ALREADY_SPENT ? 'The mint says this token is already spent.' : `The mint did not accept the token: ${e?.message ?? e}`); }
+  const plain = received.map(toPlainProof);
+  await withLock(store, async () => saveProofs(store, mint, [...(await loadProofs(store, mint)), ...plain]));
+  return { mint, amount: sum(plain), balance: await getBalance(store, mint) };
 }

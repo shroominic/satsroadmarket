@@ -16,7 +16,10 @@ export function orderRumor({ kind = 14, subject, orderId, listingRef, amount, st
   if (listingRef) tags.push(['item', listingRef, '1']);
   return { kind, content, tags: [...tags, ...extra] };
 }
-export const requestRumor = ({ orderId, listingRef, amount, title }) => orderRumor({ subject: SUBJECT.info, orderId, listingRef, amount, type: 1, status: 'pending', content: `Order request: ${title || 'listing'} for ${amount} sats.` });
+/** amount = sats (what must be paid). For non-sat listings the original price and the BTC rate used are carried as price/rate tags. */
+export const requestRumor = ({ orderId, listingRef, amount, title, fiat }) => orderRumor({ subject: SUBJECT.info, orderId, listingRef, amount, type: 1, status: 'pending',
+  content: `Order request: ${title || 'listing'} for ${amount} sats${fiat ? ` (${fiat.amount} ${fiat.currency} at ${fiat.rate} ${fiat.currency}/BTC)` : ''}.`,
+  extra: fiat ? [['price', String(fiat.amount), fiat.currency], ['rate', String(fiat.rate), `${fiat.currency}/BTC`]] : [['price', String(amount), 'SAT']] });
 export const receiptRumor = ({ orderId, listingRef, amount }) => orderRumor({ subject: SUBJECT.receipt, orderId, listingRef, amount, type: 4, status: 'confirmed', content: `Payment redeemed at the mint: ${amount} sats.` });
 export const shippedRumor = ({ orderId, listingRef, note }) => orderRumor({ subject: SUBJECT.shipping, orderId, listingRef, type: 3, status: 'shipped', content: note || 'Order fulfilled.' });
 
@@ -40,6 +43,8 @@ export function deriveOrder(rumors, { parsePayment = parsePaymentTags, redeemRec
   const seller = sellerPubkey || (/^30402:([0-9a-f]{64}):/.exec(listingRef)?.[1] ?? '');
   const buyer = info?.pubkey || '';
   const amount = Number(info && tagValue(info, 'amount')) || null;
+  const priceTag = info && tag(info, 'price'); const rateTag = info && tag(info, 'rate');
+  const fiat = priceTag && !/^sats?$/i.test(priceTag[2] || 'sat') ? { amount: Number(priceTag[1]), currency: String(priceTag[2]).toUpperCase(), rate: Number(rateTag?.[1]) || null } : null;
   const orderId = (info && tagValue(info, 'order')) || '';
   const seenTokens = new Set();
   const payments = [];
@@ -63,5 +68,5 @@ export function deriveOrder(rumors, { parsePayment = parsePaymentTags, redeemRec
     { key: 'fulfilled', label: 'Order fulfilled', done: !!shipped, at: shipped?.created_at },
   ];
   const status = shipped ? 'fulfilled' : receipt ? 'paid' : redeemFailed ? 'payment problem' : firstPay ? 'payment sent, not yet redeemed' : info ? 'awaiting payment' : sorted.length ? 'chatting' : 'empty';
-  return { orderId, listingRef, seller, buyer, amount, payments, steps, status, paid: !!receipt, fulfilled: !!shipped, redeemFailed };
+  return { orderId, listingRef, seller, buyer, amount, fiat, payments, steps, status, paid: !!receipt, fulfilled: !!shipped, redeemFailed };
 }

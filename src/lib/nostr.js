@@ -1,6 +1,7 @@
 /** Identity, relay list, relay ACK reporting and Blossom upload. No framework, no DOM. */
 import { generateSecretKey, getPublicKey, finalizeEvent } from 'nostr-tools/pure';
 import * as nip19 from 'nostr-tools/nip19';
+import { DEV_FEATURES } from './flags.js';
 
 /* ---------- safe storage (private windows / blocked storage must not crash the app) ---------- */
 export const storage = {
@@ -44,7 +45,7 @@ export const shortKey = (hexOrNpub) => { const s = hexOrNpub.length === 64 ? nip
 export const npubOf = (pubkey) => nip19.npubEncode(pubkey);
 
 /* ---------- relay list ---------- */
-export const LOCAL_RELAY = 'ws://127.0.0.1:7777';
+export const LOCAL_RELAY = DEV_FEATURES ? 'ws://127.0.0.1:7777' : '';
 const RELAYS_KEY = 'sr.relays';
 export function normalizeRelay(input) {
   let value = String(input || '').trim();
@@ -52,14 +53,35 @@ export function normalizeRelay(input) {
   if (!/^[a-z]+:\/\//i.test(value)) value = `wss://${value}`;
   let url;
   try { url = new URL(value); } catch { throw new Error('That relay address is not a valid URL.'); }
-  if (url.protocol !== 'wss:' && url.protocol !== 'ws:') throw new Error('Relay addresses must start with wss:// or ws://.');
+  if (url.protocol !== 'wss:' && !(DEV_FEATURES && url.protocol === 'ws:')) throw new Error('Relay addresses must start with wss://.');
   if (url.username || url.password) throw new Error('Relay addresses must not contain credentials.');
   return url.href.replace(/\/$/, '');
 }
-export function defaultRelays(hostname = globalThis.location?.hostname || '') {
-  const local = ['localhost', '127.0.0.1', '[::1]', ''].includes(hostname);
-  return local ? [LOCAL_RELAY] : [LOCAL_RELAY, 'wss://relay.damus.io', 'wss://nos.lol'];
+/** LISTING relays = Shopstr's own defaults (relay-config.ts), so Shopstr listings show up here and ours show up there. */
+export const SHOPSTR_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://purplepag.es', 'wss://relay.primal.net', 'wss://relay.nostr.band'];
+/** Shopstr's write-only broadcast relay: listings are also sent there, never read from it. */
+export const BROADCAST_RELAYS = ['wss://sendit.nosflare.com'];
+/** MARMOT relays = only relays that passed every kind in scripts/probe-relays.mjs (docs/RELAY_PROBE.md). */
+export const MARMOT_RELAYS = ['wss://nos.lol', 'wss://relay.primal.net', 'wss://relay.ditto.pub', 'wss://nostr.mom', 'wss://relay.snort.social'];
+export const FALLBACK_RELAYS = ['wss://nostr.oxtr.dev', 'wss://relay.gulugulu.moe', 'wss://freelay.sovbit.host'];
+const LOCAL_MODE_KEY = 'sr.localMode';
+const isLocalHost = (hostname) => DEV_FEATURES && ['localhost', '127.0.0.1', '[::1]', ''].includes(hostname);
+/** Local (offline demo) mode: explicit toggle wins; otherwise on only when served from localhost. */
+export function isLocalMode(hostname = globalThis.location?.hostname || '') {
+  if (!DEV_FEATURES) return false;
+  const v = storage.get(LOCAL_MODE_KEY);
+  return v === '1' ? true : v === '0' ? false : isLocalHost(hostname);
 }
+export function setLocalMode(on) { storage.set(LOCAL_MODE_KEY, on ? '1' : '0'); storage.del(RELAYS_KEY); storage.del('sr.listingRelays'); storage.del('sr.mint'); storage.del('sr.mints'); }
+export function defaultRelays() { return isLocalMode() ? [LOCAL_RELAY] : [...MARMOT_RELAYS]; }
+export function defaultListingRelays() { return isLocalMode() ? [LOCAL_RELAY] : [...SHOPSTR_RELAYS]; }
+const LISTING_KEY = 'sr.listingRelays';
+export function loadListingRelays() {
+  const stored = storage.getJSON(LISTING_KEY, null);
+  if (Array.isArray(stored)) { const ok = stored.filter((u) => { try { normalizeRelay(u); return true; } catch { return false; } }); if (ok.length) return ok; }
+  return defaultListingRelays();
+}
+export const saveListingRelays = (relays) => storage.setJSON(LISTING_KEY, relays);
 export function loadRelays() {
   const stored = storage.getJSON(RELAYS_KEY, null);
   if (Array.isArray(stored)) { const ok = stored.filter((u) => { try { normalizeRelay(u); return true; } catch { return false; } }); if (ok.length) return ok; }
@@ -67,20 +89,14 @@ export function loadRelays() {
 }
 export const saveRelays = (relays) => storage.setJSON(RELAYS_KEY, relays);
 
-/** Reachability probe: opens a WebSocket and waits for the handshake. */
-export function probeRelay(url, timeoutMs = 4000) {
-  return new Promise((resolve) => {
-    const started = performance.now();
-    let ws; let done = false;
-    const finish = (state, error = '') => { if (done) return; done = true; clearTimeout(timer); try { ws?.close(); } catch { /* ignore */ } resolve({ url, state, ms: Math.round(performance.now() - started), error }); };
-    const timer = setTimeout(() => finish('offline', 'Connection timed out'), timeoutMs);
-    try {
-      ws = new WebSocket(url);
-      ws.onopen = () => finish('online');
-      ws.onerror = () => finish('offline', 'Connection refused or blocked');
-      ws.onclose = () => finish('offline', 'Connection closed');
-    } catch (error) { finish('offline', error.message); }
-  });
+/** Reachability probe. Reuses the app's shared pool connection (no extra sockets); 15 s allows for slow or mobile networks. */
+export async function probeRelay(url, pool, timeoutMs = 15000) {
+  const started = performance.now();
+  const done = (state, error = '') => ({ url, state, ms: Math.round(performance.now() - started), error });
+  try {
+    const relay = await Promise.race([pool.ensureRelay(url, { connectionTimeout: timeoutMs }), new Promise((_, rej) => setTimeout(() => rej(new Error('Connection timed out')), timeoutMs + 500))]);
+    return relay?.connected === false ? done('offline', 'Not connected') : done('online');
+  } catch (error) { return done('offline', String(error?.message || error).replace(/^connection failure: /i, '')); }
 }
 
 /* ---------- relay acknowledgements ---------- */
@@ -97,6 +113,7 @@ export async function publishWithAcks(pool, relays, event, timeoutMs = 8000) {
 
 /* ---------- Blossom (BUD-02) upload with kind 24242 auth ---------- */
 export const DEFAULT_BLOSSOM = 'https://blossom.primal.net';
+export const FALLBACK_BLOSSOM = ['https://cdn.hzrd149.com', 'https://blossom.nostr.build'];
 export async function sha256Hex(buffer) { return toHex(new Uint8Array(await crypto.subtle.digest('SHA-256', buffer))); }
 export function blossomAuthTemplate({ hash, name = 'upload', now = Math.floor(Date.now() / 1000), ttl = 300 }) {
   return { kind: 24242, created_at: now, content: `Upload ${name}`, tags: [['t', 'upload'], ['x', hash], ['expiration', String(now + ttl)]] };

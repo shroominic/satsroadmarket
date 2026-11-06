@@ -50,3 +50,14 @@ export const filterListings = (listings, words = DEFAULT_BLOCKED) => {
   for (const listing of listings) (listingBlockReason(listing, words) ? hidden++ : shown.push(listing));
   return { shown, hidden };
 };
+
+/* ---------- user-editable NSFW keyword list (separate from the built-in defaults, so updating defaults never wipes edits) ---------- */
+export const NSFW_WORDS_KEY = 'sr.nsfw.words'; export const NSFW_ON_KEY = 'sr.nsfw.on';
+/** "a, B ,a\nc" -> ['a','b','c']: split on commas/newlines, trimmed, lowercase, deduped, 1..40 chars. */
+export const parseKeywordInput = (text) => [...new Set(String(text || '').split(/[,\n]/).map((w) => w.trim().toLowerCase()).filter((w) => w && w.length <= 40))];
+/** Effective list: the user's saved list, which starts as a copy of the defaults. */
+export function loadKeywords(storage) { let v = null; try { v = storage.getJSON(NSFW_WORDS_KEY, null); } catch { /* ignore */ } return Array.isArray(v) ? v.filter((w) => typeof w === 'string') : [...DEFAULT_BLOCKED]; }
+export function saveKeywords(storage, words) { try { storage.setJSON(NSFW_WORDS_KEY, [...new Set(words)]); } catch { /* ignore */ } }
+export const resetKeywords = (storage) => { try { storage.del(NSFW_WORDS_KEY); } catch { /* ignore */ } return [...DEFAULT_BLOCKED]; };
+export function nsfwEnabled(storage) { try { return storage.get(NSFW_ON_KEY) !== '0'; } catch { return true; } }
+export function setNsfwEnabled(storage, on) { try { storage.set(NSFW_ON_KEY, on ? '1' : '0'); } catch { /* ignore */ } }
