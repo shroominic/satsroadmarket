@@ -1,0 +1,79 @@
+{
+  "leather-saddlebag": {
+    "url": "https://blossom.primal.net/6e8bdd293596ee07151be9be7d38481126dc3c1a885e3ee5033fa0947d261952.jpg",
+    "sha256": "6e8bdd293596ee07151be9be7d38481126dc3c1a885e3ee5033fa0947d261952",
+    "server": "https://blossom.primal.net",
+    "type": "image/jpeg",
+    "bytes": 167855
+  },
+  "coffee-beans": {
+    "url": "https://blossom.primal.net/7f8968262250e483c740a4712c7228b1953db16076a3e040d15a0fbae67adeca.jpg",
+    "sha256": "7f8968262250e483c740a4712c7228b1953db16076a3e040d15a0fbae67adeca",
+    "server": "https://blossom.primal.net",
+    "type": "image/jpeg",
+    "bytes": 159639
+  },
+  "merino-scarf": {
+    "url": "https://blossom.primal.net/edf62663c6d3a83c1d9a54ecbef7e646e2a3354ece7fdbe8ff2870758bd826af.jpg",
+    "sha256": "edf62663c6d3a83c1d9a54ecbef7e646e2a3354ece7fdbe8ff2870758bd826af",
+    "server": "https://blossom.primal.net",
+    "type": "image/jpeg",
+    "bytes": 237274
+  },
+  "steel-seed-plate": {
+    "url": "https://blossom.primal.net/7fceda79248623263819eb0483f71183d8ed97df1d777aea972d69243f66b35e.jpg",
+    "sha256": "7fceda79248623263819eb0483f71183d8ed97df1d777aea972d69243f66b35e",
+    "server": "https://blossom.primal.net",
+    "type": "image/jpeg",
+    "bytes": 252597
+  },
+  "ceramic-mug-set": {
+    "url": "https://blossom.primal.net/fc3be547b19a9ba779f5741b3d37bf59d9da0d9f165ed9318a775b21ce1a280e.jpg",
+    "sha256": "fc3be547b19a9ba779f5741b3d37bf59d9da0d9f165ed9318a775b21ce1a280e",
+    "server": "https://blossom.primal.net",
+    "type": "image/jpeg",
+    "bytes": 185431
+  },
+  "medjool-dates": {
+    "url": "https://blossom.primal.net/6890560653dd91e7f4b3826befb1d35b58a5beef198f61892444b0ffe094d25f.jpg",
+    "sha256": "6890560653dd91e7f4b3826befb1d35b58a5beef198f61892444b0ffe094d25f",
+    "server": "https://blossom.primal.net",
+    "type": "image/jpeg",
+    "bytes": 255599
+  },
+  "bound-notebook": {
+    "url": "https://blossom.primal.net/f19f963a7cf99bcfa5643cf3a6afda5ee4e3973c4bb40fc037df52f99493a9dc.jpg",
+    "sha256": "f19f963a7cf99bcfa5643cf3a6afda5ee4e3973c4bb40fc037df52f99493a9dc",
+    "server": "https://blossom.primal.net",
+    "type": "image/jpeg",
+    "bytes": 161072
+  },
+  "spice-sampler": {
+    "url": "https://blossom.primal.net/58223fb9a2ff73a5d1a00a2969025ef91930fd8b6babfe9ac909ed5c6cd7f5f9.jpg",
+    "sha256": "58223fb9a2ff73a5d1a00a2969025ef91930fd8b6babfe9ac909ed5c6cd7f5f9",
+    "server": "https://blossom.primal.net",
+    "type": "image/jpeg",
+    "bytes": 209831
+  },
+  "brass-compass": {
+    "url": "https://blossom.primal.net/cd50f2504a66be4f74906d5ec06fa2944847c613eaa8653f0baa4d846ef8050f.jpg",
+    "sha256": "cd50f2504a66be4f74906d5ec06fa2944847c613eaa8653f0baa4d846ef8050f",
+    "server": "https://blossom.primal.net",
+    "type": "image/jpeg",
+    "bytes": 168224
+  },
+  "cotton-keffiyeh": {
+    "url": "https://blossom.primal.net/d6244092481055f34cdfaf5edf97fbcc16ba9fe4fa394293e8ace6b7069f9450.jpg",
+    "sha256": "d6244092481055f34cdfaf5edf97fbcc16ba9fe4fa394293e8ace6b7069f9450",
+    "server": "https://blossom.primal.net",
+    "type": "image/jpeg",
+    "bytes": 291523
+  },
+  "avatar": {
+    "url": "https://blossom.primal.net/ab7b43544bdb02b81e2ef08f6530896959e7177490b5be394b879c59c3efba0b.jpg",
+    "sha256": "ab7b43544bdb02b81e2ef08f6530896959e7177490b5be394b879c59c3efba0b",
+    "server": "https://blossom.primal.net",
+    "type": "image/jpeg",
+    "bytes": 292023
+  }
+}

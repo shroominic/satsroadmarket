@@ -31,44 +31,67 @@ Buyers and sellers keep portable Nostr identities. No accounts, no invoices, no 
 
 Sellers confirm they list legal goods only, and relay operators are responsible for filtering. The client also hides listings matching a small set of keywords.
 
+## Defaults
+
+| | Default |
+|---|---|
+| Marmot relays | `nos.lol`, `relay.primal.net`, `relay.ditto.pub`, `nostr.mom`, `relay.snort.social` |
+| Listing relays | Shopstr's defaults: `relay.damus.io`, `nos.lol`, `purplepag.es`, `relay.primal.net`, `relay.nostr.band` (plus a write-only broadcast relay) |
+| Mint | Minibits, `https://mint.minibits.cash/Bitcoin` (custom https mints allowed) |
+| Images | Blossom, `blossom.primal.net` |
+
+Relay results are in [docs/RELAY_PROBE.md](docs/RELAY_PROBE.md). Funding a mint is described in [docs/MINTS.md](docs/MINTS.md).
+
+## Features
+
+- Shopstr-compatible NIP-99 listings with fiat or sat prices, live conversion, paging with infinite scroll and an offline cache.
+- Private conversations over Marmot / MLS, with an **M** badge for vendors who publish a key package.
+- Optional standard NIP-17 messages for sellers without Marmot, with a clear warning.
+- Cashu payment sent inside the conversation. An order is **paid** only after the seller redeems the token at the mint.
+- Filters: has image, editable NSFW keywords, Marmot vendors.
+
 ## Run it
 
-Requires Node 20+ and Docker (for the local mint only).
+Requires Node 20+ and Docker (tests and the local mint only).
 
 ```bash
 npm install
-npm run relay     # local relay on ws://127.0.0.1:7777
-npm run mint      # local Cashu mint on http://127.0.0.1:3338 (nutshell, fake Lightning)
-npm run dev       # app on http://127.0.0.1:5173
-npm test
+npm run dev          # app with local relay and mint options, http://127.0.0.1:5173
+npm run relay        # local relay on ws://127.0.0.1:7777
+npm run mint         # local Cashu mint on http://127.0.0.1:3338
+npm test             # starts the local mint, runs all tests serially
 ```
 
-Use two browser profiles for two identities. Open the app, generate or import an `nsec` in each, and follow the in-app steps: seller publishes a key package and a listing, buyer opens it and starts a private conversation, seller accepts the invite, buyer pays with ecash, seller redeems.
-
-Build and deploy:
+Fake-money end-to-end tests run on a separate build and never on the live site:
 
 ```bash
-npm run build
-npx wrangler pages deploy dist --project-name satsroadmarket
+npm run build:e2e && npm run preview:e2e
+```
+
+Use two browser profiles for two identities.
+
+Deploy (GitHub Pages without Actions):
+
+```bash
+scripts/deploy-gh-pages.sh
 ```
 
 ## Status
 
-Verified by automated tests (local relay and local mint):
+Verified in automated tests and end-to-end runs on public relays, Blossom and a public test mint (full results in [docs/PROD_TEST_REPORT.md](docs/PROD_TEST_REPORT.md)):
 
-- Marmot: two identities, invite and deferred join, two-way messages, restart persistence, relay-down retry.
-- Cashu: happy path, invalid token, double spend, duplicate delivery, wrong mint, wrong amount, mint down.
+- Seller image upload and listing, buyer discovery, private conversation, messages both ways, ecash payment, seller redeem, fulfilment, reload.
+- Reused token, double spend, wrong mint, seller offline then joins, blocked relay, missing image, fallback message.
 
-Reported working in a browser with two identities against the local relay and mint: listing, invite, chat, payment, redeem, reload.
-
-Not yet verified: public relays, public mints, Blossom upload, and the late-joining seller through the UI. See [docs/](docs) for test reports as they land.
+Not verified: a payment on a real mainnet mint. Minibits is the default and has only been checked up to creating an invoice. The "upgrade to Marmot" button is untested.
 
 ## Limits
 
 - Browser storage (keys, group state, wallet) is not encrypted at rest.
 - Relays still see metadata such as timing and event kinds.
 - No escrow. The wallet has no seed backup.
-- The seller redeems at a single configured mint.
+- The seller redeems only at the mints on their allow-list.
+- Some public relays rate-limit or reject Marmot and listing kinds.
 
 ## Layout
 
