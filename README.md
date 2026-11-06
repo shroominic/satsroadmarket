@@ -9,7 +9,7 @@ Nostalgic early-web marketplace look; original camel logo; no functions, forms, 
 |------|------|
 | `index.html` | Hosting entrypoint |
 | `assets/style.css` | Local styles only |
-| `assets/camel-logo.svg` | Original camel + ₿ mark |
+| `assets/laser-camel.jpg` | Original camel + ₿ mark |
 | `README.md` | This file |
 
 No frameworks, CDNs, fonts hosts, analytics, or JS.
@@ -33,7 +33,7 @@ When the domain is ready, point the host’s document root (or static bucket) at
 
 - `index.html`
 - `assets/style.css`
-- `assets/camel-logo.svg`
+- `assets/laser-camel.jpg`
 
 Do not enable server-side apps, forms, or redirects beyond ordinary HTTPS. This site is intentionally functionless.
 
@@ -48,3 +48,5 @@ Do not enable server-side apps, forms, or redirects beyond ordinary HTTPS. This 
 ## Out of scope
 
 Live market, login, payments, chat, tracking, downloads of paid assets, and any domain/DNS/hosting changes from this repo alone.
+
+Branding: generated laser-eye camel bitmap on parchment (assets/laser-camel.jpg).
