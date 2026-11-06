@@ -20,7 +20,7 @@ case "$cmd" in
         -e MINT_LISTEN_HOST=0.0.0.0 -e MINT_LISTEN_PORT=3338 \
         -e MINT_PRIVATE_KEY=satsroad-local-test-key-not-secret \
         -e FAKEWALLET_BRR=True -e FAKEWALLET_DELAY_PAYMENT=0 \
-        -e MINT_INPUT_FEE_PPK=0 \
+        -e MINT_INPUT_FEE_PPK=0 -e MINT_RATE_LIMIT=FALSE \
         "$IMAGE" poetry run mint >/dev/null
     fi
     for _ in $(seq 1 60); do

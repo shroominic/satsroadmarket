@@ -7,12 +7,13 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --test test/*.mjs",
+    "test": "node --test --test-concurrency=1 test/*.mjs",
     "relay": "node scripts/local-relay.mjs",
     "mint": "bash scripts/local-mint.sh",
     "deploy": "npm run build && wrangler pages deploy dist --project-name satsroadmarket",
     "build:e2e": "VITE_E2E=1 vite build --outDir ${E2E_OUT:-/tmp/satsroad-e2e-dist} --emptyOutDir",
-    "preview:e2e": "vite preview --outDir ${E2E_OUT:-/tmp/satsroad-e2e-dist} --host 127.0.0.1 --port 4173"
+    "preview:e2e": "vite preview --outDir ${E2E_OUT:-/tmp/satsroad-e2e-dist} --host 127.0.0.1 --port 4173",
+    "pretest": "bash scripts/local-mint.sh start || echo \"WARNING: local mint not started (needs docker); test/cashu.mint.test.mjs will fail\""
   },
   "dependencies": {
     "@cashu/cashu-ts": "^4.13.0",
