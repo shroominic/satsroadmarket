@@ -3,7 +3,7 @@ import { DEV_FEATURES } from '../lib/flags.js';
 import { minAcceptableSats } from '../lib/money.js';
 import { fetchListingDms } from '../marketplace/dm.js';
 import { isDmId, dmId } from '../marketplace/dmchat.js';
-import { h, ago, sats, notice, button, busy } from './dom.js';
+import { h, setKids, ago, sats, notice, button, busy } from './dom.js';
 import { deriveOrder, parsePaymentTags, receiptRumor, requestRumor, shippedRumor, SUBJECT } from '../marketplace/orders.js';
 import { shortKey, storage, npubOf } from '../lib/nostr.js';
 
@@ -141,7 +141,7 @@ export function mountChats(root, app) {
   function drawThread() {
     const { id, rumors, order, meta, role, group } = current;
     msgBox.hidden = false; composer.hidden = false;
-    head.replaceChildren(h('h2', {}, listingTitle(order.listingRef, meta)), group?.standardDm ? h('div', {}, h('span', { class: 'pill pill-wait', 'data-testid': 'dm-label' }, 'Standard DM (not Marmot)'), h('span', { class: 'small quiet' }, ' End-to-end encrypted with NIP-17 gift wraps, but no forward secrecy and more metadata than Marmot.')) : null, h('div', { class: 'small quiet' },
+    setKids(head, h('h2', {}, listingTitle(order.listingRef, meta)), group?.standardDm ? h('div', {}, h('span', { class: 'pill pill-wait', 'data-testid': 'dm-label' }, 'Standard DM (not Marmot)'), h('span', { class: 'small quiet' }, ' End-to-end encrypted with NIP-17 gift wraps, but no forward secrecy and more metadata than Marmot.')) : null, h('div', { class: 'small quiet' },
       `You are the ${role}. `, order.amount ? `Order ${sats(order.amount)} · ` : '', h('span', { class: `pill pill-${order.paid ? 'ok' : order.redeemFailed ? 'bad' : 'wait'}` }, order.status.toUpperCase())));
     timelineBox.replaceChildren(h('ol', { class: 'timeline' }, ...order.steps.map((s) => h('li', { class: `${s.done ? 'done' : ''} ${s.error ? 'bad' : ''}` }, h('span', { class: 'step-mark', 'aria-hidden': 'true' }, s.error ? '!' : s.done ? '✔' : '○'), h('span', {}, h('b', {}, s.label), s.at ? ` · ${ago(s.at)}` : '', s.detail ? ` · ${s.detail}` : '', s.error ? h('div', { class: 'step-error' }, s.error) : null)))));
     // messages
