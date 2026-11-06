@@ -1,80 +1,40 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="SatsRoadMarket — Browse openly. Trade privately. Nostr-native marketplace.">
-  <title>SatsRoadMarket</title>
-  <link rel="stylesheet" href="assets/style.css">
-  <link rel="icon" href="assets/satsroad-logo.jpg" type="image/jpeg">
-</head>
-<body>
-  <div class="page">
-
-    <header class="top">
-      <div class="brand-slot">
-        <img class="logo-sm" src="assets/satsroad-logo.jpg" width="160" height="48" alt="SatsRoad">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#000000">
+    <meta name="description" content="SatsRoad Market: public listings, private encrypted conversation, and ecash on Nostr.">
+    <title>SatsRoad Market — private marketplace</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="stylesheet" href="/src/style.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#view">Skip to content</a>
+    <header class="site-header">
+      <div class="header-inner">
+        <a class="brand" href="#/market" aria-label="SatsRoad private marketplace, home">
+          <img class="brand-logo" src="/satsroad-logo-crop.jpg" width="1060" height="560" alt="SatsRoad — private marketplace, pixel camel with rider">
+        </a>
+        <div class="header-right">
+          <span class="led" id="relay-status" role="status">Relays checking…</span>
+          <span class="led" id="marmot-status" role="status">Marmot off</span>
+          <span class="who">identity: <b id="who">no identity</b></span>
+        </div>
       </div>
-      <nav class="nav" aria-label="Sections">
-        <span class="nav-item">Messages</span>
-        <span class="nav-gap">·</span>
-        <span class="nav-item">Vendors</span>
-        <span class="nav-gap">·</span>
-        <span class="nav-item">About</span>
+      <nav class="main-nav" aria-label="Main">
+        <a data-nav="market" href="#/market">Marketplace</a>
+        <a data-nav="sell" href="#/sell">Sell</a>
+        <a data-nav="chats" href="#/chats">Conversations</a>
+        <a data-nav="identity" href="#/identity">Identity &amp; relays</a>
       </nav>
-      <div class="top-meta">Bitcoin · Nostr</div>
     </header>
-
-    <section class="hero">
-      <img class="logo-lg" src="assets/satsroad-logo.jpg" width="640" height="192" alt="SatsRoad open marketplace — camel with rider">
-      <p class="tagline">Browse openly. Trade privately.</p>
-    </section>
-
-    <div class="cols">
-      <aside class="col col-left">
-        <h2>Browse openly</h2>
-        <p class="blurb">Public listings on Nostr. No storefront login required.</p>
-        <div class="cat-box">
-          <div class="cat-head">Shop by Category</div>
-          <ul class="cats">
-            <li><span>Digital goods</span></li>
-            <li><span>Apparel</span></li>
-            <li><span>Art</span></li>
-            <li><span>Books</span></li>
-            <li><span>Electronics</span></li>
-            <li><span>Services</span></li>
-          </ul>
-        </div>
-      </aside>
-
-      <section class="col col-right">
-        <h2>Privacy, without the platform</h2>
-        <ul class="feats">
-          <li>
-            <strong>Marmot-encrypted vendor conversations</strong>
-            Buyer and seller meet in private groups—not public threads.
-          </li>
-          <li>
-            <strong>Portable npub reputation</strong>
-            Your identity travels with you across clients.
-          </li>
-          <li>
-            <strong>Cashu-spent sats</strong>
-            Checkout without invoices, accounts, or payment-address linkability.
-          </li>
-        </ul>
-
-        <div class="soon">
-          <div class="soon-title">Coming soon</div>
-          <div class="soon-body">Built at BTC++ Seoul</div>
-        </div>
-      </section>
-    </div>
-
-    <footer class="foot">
-      SatsRoadMarket · satsroadmarket.com
+    <noscript><p class="noscript">SatsRoad Market needs JavaScript: keys, relays and encryption all run in your browser.</p></noscript>
+    <main id="view" class="page" tabindex="-1"></main>
+    <footer class="site-footer">
+      <span>SatsRoad Market &bull; Browse publicly. Talk privately. Pay with ecash.</span>
+      <span>Listings are NIP-99 (Shopstr-compatible). Chats are Marmot/MLS. Payments are Cashu.</span>
     </footer>
-
-  </div>
-</body>
+    <script type="module" src="/src/main.js"></script>
+  </body>
 </html>

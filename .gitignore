@@ -1,0 +1,8 @@
+node_modules
+dist
+.research
+.wrangler
+chief-ex-prompt.txt
+.DS_Store
+*.log
+.playwright-mcp

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SatsRoad Market - slides</title>
+<style>
+:root{--g:#0a9b4f;--gb:#3fe08a;--gd:#066b35;--r:#ff1a2e;--bg:#121619}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--g);overflow:hidden}
+body{font-family:ui-monospace,"SF Mono",Menlo,Consolas,"Courier New",monospace;letter-spacing:.02em}
+.s{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;padding:6vh 8vw;gap:3vh}
+.s.on{display:flex}
+h1,h2{font-weight:700;line-height:1.05;color:var(--gb);font-size:clamp(28px,6.4vw,92px);text-transform:uppercase;letter-spacing:.01em}
+h1 small{display:block;color:var(--g);font-size:.42em;margin-top:.5em;text-transform:lowercase;font-weight:400}
+.k{color:var(--g);font-size:clamp(14px,1.8vw,24px);text-transform:uppercase;letter-spacing:.3em}
+ul{list-style:none;font-size:clamp(20px,4vw,56px);line-height:1.35}
+li::before{content:"> ";color:var(--gd)}
+li.x{color:var(--gb)}
+ol{list-style:none;counter-reset:n;font-size:clamp(18px,3.2vw,44px);line-height:1.45}
+ol li{counter-increment:n}ol li::before{content:counter(n) ". ";color:var(--r)}
+.dot{display:inline-block;width:.45em;height:.45em;border-radius:50%;background:var(--r);box-shadow:0 0 .6em var(--r);vertical-align:middle;margin-left:.3em}
+.dim{color:var(--gd)}
+.logo{width:min(70vw,640px);height:auto;}
+svg.d{width:100%;max-height:44vh}
+svg.d text{font-family:inherit}
+#bar{position:fixed;left:0;bottom:0;height:3px;background:var(--g);width:0;transition:width .2s}
+#n{position:fixed;right:2vw;bottom:1.5vh;font-size:14px;color:var(--gd)}
+#n i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--r);margin-right:8px}
+.ft{font-size:clamp(14px,2vw,26px);color:var(--gd)}
+.cr:after{content:"_";animation:b 1s steps(1) infinite}@keyframes b{50%{opacity:0}}
+</style>
+</head>
+<body>
+
+<section class="s">
+  <img class="logo" src="/satsroad-logo-crop.jpg" alt="SatsRoad camel" onerror="this.style.display='none';document.getElementById('fb').style.display='block'">
+  <svg id="fb" style="display:none;width:min(40vw,260px);" viewBox="0 0 32 20" shape-rendering="crispEdges"><g fill="#3fe08a"><rect x="4" y="2" width="3" height="3"/><rect x="7" y="4" width="2" height="2"/><rect x="9" y="6" width="3" height="3"/><rect x="12" y="4" width="3" height="3"/><rect x="15" y="6" width="3" height="3"/><rect x="18" y="8" width="8" height="5"/><rect x="9" y="9" width="12" height="4"/><rect x="9" y="13" width="2" height="6"/><rect x="14" y="13" width="2" height="6"/><rect x="21" y="13" width="2" height="6"/><rect x="25" y="13" width="2" height="6"/></g><rect x="5" y="3" width="1" height="1" fill="#ff1a2e"/></svg>
+</section>
+
+<section class="s">
+  <p class="k">how</p>
+  <h2>Three pieces</h2>
+  <svg class="d" viewBox="0 0 900 220" fill="none" stroke="#0a9b4f" stroke-width="3">
+    <g font-size="26" fill="#3fe08a" stroke="none" text-anchor="middle">
+      <text x="140" y="95">NIP-99</text><text x="140" y="130" fill="#0a9b4f" font-size="20">Shopstr listings</text>
+      <text x="450" y="95">Marmot</text><text x="450" y="130" fill="#0a9b4f" font-size="20">MLS group chat</text>
+      <text x="760" y="95">Payment</text><text x="760" y="130" fill="#0a9b4f" font-size="20">in private chat</text>
+    </g>
+    <rect x="20" y="40" width="240" height="120"/><rect x="330" y="40" width="240" height="120"/><rect x="640" y="40" width="240" height="120"/>
+    <path d="M260 100H330M570 100H640M318 92l12 8-12 8M628 92l12 8-12 8"/>
+    <circle cx="880" cy="40" r="8" fill="#ff1a2e" stroke="none"/>
+  </svg>
+  <p class="ft">public &rarr; private &rarr; paid</p>
+</section>
+
+<section class="s">
+  <p class="k">live demo &middot; 2 profiles</p>
+  <ol>
+    <li>seller lists</li>
+    <li>buyer finds</li>
+    <li>invite &rarr; Marmot chat</li>
+    <li>token in chat &rarr; redeem</li>
+    <li>reopen: still there?</li>
+  </ol>
+  <p class="ft">we show real status. no fake "paid".</p>
+</section>
+
+<section class="s">
+  <p class="k">limits</p>
+  <ul>
+    <li>seller trusts one mint</li>
+    <li>metadata visible on relays</li>
+    <li>no escrow</li>
+    <li>legal goods only; relays filter</li>
+  </ul>
+  <p class="ft">tested: Marmot msgs + Cashu redeem on local relay/mint. full browser run: shown live.</p>
+</section>
+
+<section class="s">
+  <p class="k">built on</p>
+  <ul>
+    <li>Shopstr</li><li>marmot-ts</li><li>cashu-ts</li><li>Blossom</li>
+  </ul>
+  <h2 style="font-size:clamp(24px,4.5vw,64px);text-transform:none">satsroadmarket.com</h2>
+</section>
+
+<div id="bar"></div><div id="n"></div>
+<script>
+(function(){
+  var S=[].slice.call(document.querySelectorAll('.s')),i=0,n=document.getElementById('n'),b=document.getElementById('bar');
+  function show(k,u){
+    i=Math.max(0,Math.min(S.length-1,k));
+    S.forEach(function(s,j){s.classList.toggle('on',j===i)});
+    n.innerHTML='<i></i>'+(i+1)+' / '+S.length;
+    b.style.width=((i+1)/S.length*100)+'%';
+    if(u!==false){try{history.replaceState(null,'','#'+(i+1))}catch(e){}}
+  }
+  function fromHash(){var h=parseInt(location.hash.slice(1),10);show(isNaN(h)?0:h-1,false)}
+  window.addEventListener('hashchange',fromHash);
+  document.addEventListener('keydown',function(e){
+    if(e.metaKey||e.ctrlKey||e.altKey)return;
+    var k=e.key;
+    if(k==='ArrowRight'||k==='ArrowDown'||k===' '||k==='PageDown'||k==='Enter'){e.preventDefault();show(i+1)}
+    else if(k==='ArrowLeft'||k==='ArrowUp'||k==='PageUp'||k==='Backspace'){e.preventDefault();show(i-1)}
+    else if(k==='Home'){show(0)}
+    else if(k==='End'){show(S.length-1)}
+    else if(k==='f'||k==='F'){
+      if(document.fullscreenElement)document.exitFullscreen();
+      else if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen();
+    }
+  });
+  var x0=null,y0=null;
+  document.addEventListener('touchstart',function(e){x0=e.touches[0].clientX;y0=e.touches[0].clientY},{passive:true});
+  document.addEventListener('touchend',function(e){
+    if(x0===null)return;
+    var dx=e.changedTouches[0].clientX-x0,dy=e.changedTouches[0].clientY-y0;
+    if(Math.abs(dx)>40&&Math.abs(dx)>Math.abs(dy))show(i+(dx<0?1:-1));
+    else if(Math.abs(dx)<10&&Math.abs(dy)<10)show(i+(e.changedTouches[0].clientX>innerWidth/2?1:-1));
+    x0=null;
+  },{passive:true});
+  fromHash();
+})();
+</script>
+</body>
+</html>
