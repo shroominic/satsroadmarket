@@ -1,22 +1,20 @@
 # SatsRoadMarket — static landing
 
 Brand-only static site for **SatsRoadMarket** (`satsroadmarket.com`).
-Nostalgic early-web marketplace look; original camel logo; no functions, forms, or backend.
+Early-2010s utilitarian marketplace look; no functions, forms, or backend.
 
-## Files
+## Files (4)
 
 | Path | Role |
 |------|------|
 | `index.html` | Hosting entrypoint |
 | `assets/style.css` | Local styles only |
-| `assets/laser-camel.jpg` | Original camel + ₿ mark |
+| `assets/satsroad-logo.jpg` | Brand logo (camel + rider, green SatsRoad) |
 | `README.md` | This file |
 
 No frameworks, CDNs, fonts hosts, analytics, or JS.
 
 ## Preview locally
-
-From this directory:
 
 ```bash
 cd /workspace/satsroadmarket
@@ -29,24 +27,17 @@ Or open `index.html` directly in a browser (file:// works; all assets are relati
 
 ## Deploy later (manual)
 
-When the domain is ready, point the host’s document root (or static bucket) at this folder so `index.html` is served at `/`. Upload:
+Point the host document root (or static bucket) at this folder so `index.html` is `/`. Upload:
 
 - `index.html`
 - `assets/style.css`
-- `assets/laser-camel.jpg`
+- `assets/satsroad-logo.jpg`
 
-Do not enable server-side apps, forms, or redirects beyond ordinary HTTPS. This site is intentionally functionless.
+HTTPS only; no server-side apps or forms. This site is intentionally functionless.
 
-## Brand notes
+## Brand
 
 - Name: **SatsRoadMarket**
 - Motto: *Browse openly. Trade privately.*
-- Theme: Nostr-native marketplace, private vendor chat, portable reputation, Cashu-ready checkout
-- Palette: parchment / dark brown / black
-- Logo: original SVG camel (not a third-party mark)
-
-## Out of scope
-
-Live market, login, payments, chat, tracking, downloads of paid assets, and any domain/DNS/hosting changes from this repo alone.
-
-Branding: generated laser-eye camel bitmap on parchment (assets/laser-camel.jpg).
+- Logo file: `assets/satsroad-logo.jpg`
+- Accent: green ≈ `#3f8b43`

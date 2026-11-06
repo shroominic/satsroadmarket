@@ -3,82 +3,78 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="SatsRoadMarket — browse openly, trade privately. A Nostr-native marketplace concept for Bitcoin privacy commerce.">
-  <title>SatsRoadMarket — Browse openly. Trade privately.</title>
+  <meta name="description" content="SatsRoadMarket — Browse openly. Trade privately. Nostr-native marketplace.">
+  <title>SatsRoadMarket</title>
   <link rel="stylesheet" href="assets/style.css">
-  <link rel="icon" href="assets/laser-camel.jpg" type="image/jpeg">
+  <link rel="icon" href="assets/satsroad-logo.jpg" type="image/jpeg">
 </head>
 <body>
-  <div class="wrap">
-    <div class="topbar">
-      <span>SatsRoadMarket // static preview</span>
-      <span>Nostr · Bitcoin · privacy commerce</span>
-    </div>
+  <div class="page">
 
-    <main class="panel">
-      <header class="hero">
-        <img class="logo" src="assets/laser-camel.jpg" width="220" height="165" alt="SatsRoadMarket camel with laser eyes">
-        <h1 class="brand-title">SatsRoadMarket</h1>
-        <p class="tagline">Browse openly. Trade privately.</p>
-        <p class="subtag">a Nostr-native marketplace · sats over the open road</p>
-      </header>
-
-      <nav class="nav" aria-label="Site sections">
-        <a href="#browse">Browse</a>
-        <span class="sep">·</span>
-        <a href="#vendors">Vendors</a>
-        <span class="sep">·</span>
-        <a href="#messages">Messages</a>
-        <span class="sep">·</span>
-        <a href="#about">About</a>
+    <header class="top">
+      <div class="brand-slot">
+        <img class="logo-sm" src="assets/satsroad-logo.jpg" width="160" height="48" alt="SatsRoad">
+      </div>
+      <nav class="nav" aria-label="Sections">
+        <span class="nav-item">Messages</span>
+        <span class="nav-gap">·</span>
+        <span class="nav-item">Vendors</span>
+        <span class="nav-gap">·</span>
+        <span class="nav-item">About</span>
       </nav>
+      <div class="top-meta">Bitcoin · Nostr</div>
+    </header>
 
-      <div class="content">
-        <p class="lead" id="about">
-          Public listings. Private conversations. Portable reputation.
-          Built for people who want commerce that travels with their npub—
-          not a walled marketplace account.
-        </p>
+    <section class="hero">
+      <img class="logo-lg" src="assets/satsroad-logo.jpg" width="640" height="192" alt="SatsRoad open marketplace — camel with rider">
+      <p class="tagline">Browse openly. Trade privately.</p>
+    </section>
 
-        <ul class="features">
-          <li id="browse">
-            <strong>Nostr-native marketplace</strong>
-            <span>Listings ride ordinary Nostr events. Browse the open road; nothing locked behind a storefront login.</span>
-          </li>
-          <li id="messages">
-            <strong>Private vendor conversations</strong>
-            <span>Buyer and seller meet in encrypted group chat—not public comment threads or plain DMs.</span>
-          </li>
-          <li id="vendors">
-            <strong>Portable reputation</strong>
-            <span>Your identity is your npub. Carry trust and history across clients instead of starting over on every site.</span>
+    <div class="cols">
+      <aside class="col col-left">
+        <h2>Browse openly</h2>
+        <p class="blurb">Public listings on Nostr. No storefront login required.</p>
+        <div class="cat-box">
+          <div class="cat-head">Shop by Category</div>
+          <ul class="cats">
+            <li><span>Digital goods</span></li>
+            <li><span>Apparel</span></li>
+            <li><span>Art</span></li>
+            <li><span>Books</span></li>
+            <li><span>Electronics</span></li>
+            <li><span>Services</span></li>
+          </ul>
+        </div>
+      </aside>
+
+      <section class="col col-right">
+        <h2>Privacy, without the platform</h2>
+        <ul class="feats">
+          <li>
+            <strong>Marmot-encrypted vendor conversations</strong>
+            Buyer and seller meet in private groups—not public threads.
           </li>
           <li>
-            <strong>Cashu-ready checkout</strong>
-            <span>Designed for ecash payments without invoices, accounts, or payment-address linkability.</span>
+            <strong>Portable npub reputation</strong>
+            Your identity travels with you across clients.
+          </li>
+          <li>
+            <strong>Cashu-spent sats</strong>
+            Checkout without invoices, accounts, or payment-address linkability.
           </li>
         </ul>
 
-        <p class="note">
-          This page is a static brand landing only. No carts, forms, accounts, or live market functions.
-          The product demo lives in the hackathon build—not on this site.
-        </p>
+        <div class="soon">
+          <div class="soon-title">Coming soon</div>
+          <div class="soon-body">Built at BTC++ Seoul</div>
+        </div>
+      </section>
+    </div>
 
-        <hr class="hr">
-
-        <p style="text-align:center;font-size:0.92rem;margin:0 0 12px;color:#4a3218;">
-          <em>Desert road. Open relays. Quiet trades.</em>
-        </p>
-      </div>
-    </main>
-
-    <footer class="footer">
-      <div class="panel-foot">
-        SatsRoadMarket · satsroadmarket.com<br>
-        Static landing · original camel mark · no trackers
-      </div>
-      <div>© 2026 SatsRoadMarket · harmless concept site · Bitcoin / Nostr privacy commerce</div>
+    <footer class="foot">
+      SatsRoadMarket · satsroadmarket.com
     </footer>
+
   </div>
 </body>
 </html>
